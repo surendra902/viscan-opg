@@ -8,6 +8,8 @@
 
 **🚀 Live Interactive Demo:** [https://huggingface.co/spaces/surendra08/viscan-opg](https://huggingface.co/spaces/surendra08/viscan-opg)
 
+**Demo video (5–8 min, narrated):** Pending — to be recorded against this build and linked here.
+
 The Space runs this FastAPI app with the Docker SDK on port 7860 and bakes in the 2D detector weights. On that CPU runtime the two pre-segmented CBCT demos and uploaded 5-class label maps render meshes, while a raw CBCT upload returns HTTP 503 because nnU-Net and the Zenodo weights are not installed there (`/health` reports `cbct.ready: false`).
 
 An end-to-end clinical decision-support prototype for automated finding detection in panoramic dental radiographs (OPG). Detects 4 core pathological conditions with original pixel coordinates, confidence scores, deterministic summaries, and side-by-side visual clinical review. The same API also accepts 3D CBCT input; live nnU-Net inference is optional and the service fails closed when it is not installed.
@@ -17,7 +19,7 @@ An end-to-end clinical decision-support prototype for automated finding detectio
 ## 1. Key Capabilities
 
 - **Core 2D OPG Pathology Detection:** Detects `caries`, `deep_caries`, `periapical_lesion`, and `impacted_tooth` with original pixel coordinates and confidence scores.
-- **Bonus 3D CBCT Volumetric Extension:** Accepts raw 3D CBCT (`.nii`, `.nii.gz`, or a ZIP with a 3D DICOM series/NIfTI pair), pre-segmented 5-class NIfTI label maps, and ZIP bundles containing a volume + label map. Raw volumes run **pretrained `DentalSegmentator` (`nnU-Net 3d_fullres` fold_0, CC BY 4.0, used as-is)** when `nnunetv2` and the Zenodo weights are installed; otherwise the request returns HTTP 503 with setup instructions and no demo data is substituted. The service computes the minimum 3D voxel-surface distance in millimetres between lower teeth (label 4) and the left/right mandibular canal (label 5), and exports per-upload `.glb` / `.stl` meshes for browser review.
+- **Bonus 3D CBCT Volumetric Extension:** Accepts raw 3D CBCT (`.nii`, `.nii.gz`, or a ZIP with a 3D DICOM series/NIfTI pair), pre-segmented 5-class NIfTI label maps, and ZIP bundles containing a volume + label map. Raw volumes run **pretrained `DentalSegmentator` (`nnU-Net 3d_fullres` fold_0, CC BY 4.0, used as-is)** when `nnunetv2` and the Zenodo weights are installed; otherwise the request returns HTTP 503 with setup instructions and no demo data is substituted. The service computes the minimum 3D voxel-surface distance in millimetres between lower teeth (label 4) and the mandibular canal (label 5) in each half of the volume, and exports per-upload `.glb` / `.stl` meshes for browser review.
 - **Honest 3D Provenance:** Every CBCT response reports `segmentation_source` (`model_inference`, `uploaded_labelmap`, `demo_reference_labelmap`, or `demo_model_labelmap`), whether inference ran in that request, per-stage timings, and process/GPU memory. A 2D OPG response explicitly reports `three_d_available: false`.
 - **Multi-Modality Ingestion:** Supports standard images (PNG, JPEG), single-frame 2D DICOM (`.dcm`) with Modality LUT + VOI LUT windowing and MONOCHROME1 polarity inversion, and 3D NIfTI / zipped 3D DICOM series with automatic patient de-identification.
 - **Input Validity Gate:** Identifies and rejects non-dental, blank, or text-document uploads before inference.
@@ -71,11 +73,16 @@ Open **http://localhost:8000** in your browser.
 ### Option B: Docker Container
 ```bash
 docker build -t viscan-opg .
-docker run -p 8000:8000 viscan-opg
+docker run -p 8000:8000 \
+  -v "$(pwd)/checkpoints:/app/checkpoints:ro" \
+  viscan-opg
 ```
 
-The default image runs 2D OPG, pre-segmented CBCT label maps, and the demo
-bundles. Raw CBCT inference is opt-in:
+The image does not contain model weights (`.dockerignore` excludes `*.pth`), so
+mount a directory holding `best_model.pth` (see §4) at `/app/checkpoints`. With
+that mount the image runs 2D OPG, pre-segmented CBCT label maps, and the demo
+bundles; without it `/health` reports `model_loaded: false` and `/analyze`
+returns HTTP 503. Raw CBCT inference is opt-in:
 
 ```bash
 docker build --build-arg INSTALL_CBCT=true -t viscan-opg-cbct .
@@ -107,8 +114,8 @@ curl http://localhost:8000/health
 ```
 
 `/health` reports `cbct.ready`, `nnunetv2_installed`, `weights_dir_configured`,
-`model_folder_found`, and a human-readable `reason` (filesystem paths are not
-exposed). When `ready` is false, raw CBCT uploads return HTTP 503; pre-segmented
+`model_folder_found`, and a human-readable `reason`; the `cbct` block does not
+echo the weights directory path. When `ready` is false, raw CBCT uploads return HTTP 503; pre-segmented
 label maps and demo scans still work.
 
 ---
@@ -151,35 +158,35 @@ curl -X POST "http://localhost:8000/analyze?confidence_threshold=0.70" \
      -F "file=@sample_opg.png"
 ```
 
-**Response (JSON):**
+**Response (JSON, abridged — 2 of 8 findings — from `samples/sample_01_val_1_report.json`, measured on CPU):**
 ```json
 {
-  "image_id": "opg_a1b2c3d4",
+  "image_id": "sample_01_val_1",
   "modality": "OPG",
   "model": {
     "name": "fasterrcnn_resnet50_fpn_v2",
     "version": "2.0.0"
   },
-  "inference_ms": 4618.0,
+  "inference_ms": 8301.8,
   "findings": [
     {
-      "class": "deep_caries",
-      "confidence": 0.84,
+      "class": "impacted_tooth",
+      "confidence": 0.99,
       "tooth_fdi": null,
-      "bbox": [412.0, 288.0, 470.0, 351.0]
+      "bbox": [1260.5, 176.1, 1391.4, 301.8]
     },
     {
-      "class": "periapical_lesion",
-      "confidence": 0.76,
+      "class": "caries",
+      "confidence": 0.98,
       "tooth_fdi": null,
-      "bbox": [405.0, 360.0, 480.0, 435.0]
+      "bbox": [1142.7, 460.4, 1323.1, 663.3]
     }
   ],
-  "summary": "2 findings: 1 deep caries, 1 periapical lesion.",
-  "original_image_url": "/results/opg_a1b2c3d4_original.png",
-  "annotated_image_url": "/results/opg_a1b2c3d4_annotated.png",
+  "summary": "8 findings: 5 caries, 3 impacted tooth.",
+  "original_image_url": "/samples/sample_01_val_1_input.png",
+  "annotated_image_url": "/samples/sample_01_val_1_annotated.png",
   "three_d_available": false,
-  "three_d_note": "No 3D model for a 2D OPG: a panoramic radiograph contains no volumetric data. Upload a CBCT volume for 3D segmentation.",
+  "three_d_note": "No 3D model for a 2D OPG: a panoramic radiograph contains no volumetric data. Upload a CBCT volume (.nii, .nii.gz, or a zipped DICOM/NIfTI series) for 3D segmentation.",
   "disclaimer": "AI-assisted findings for dentist review. Not a diagnosis."
 }
 ```
@@ -213,7 +220,7 @@ curl -X POST "http://localhost:8000/analyze/sample_cbct?scan=PostDentalSurgery"
   "image_id": "PostDentalSurgery",
   "modality": "CBCT",
   "segmentation_source": "demo_reference_labelmap",
-  "segmentation_source_detail": "Shipped demo labels are the official SlicerDentalSegmentator reference mask ...",
+  "segmentation_source_detail": "Shipped demo labels are the published SlicerDentalSegmentator reference mask for this scan (https://github.com/gaudot/SlicerDentalSegmentator), after this repository's 60 mm3 island filter was applied to labels 1-4 ...",
   "demo": true,
   "model": {
     "name": "DentalSegmentator_nnUNetv2_3d_fullres",
@@ -223,19 +230,19 @@ curl -X POST "http://localhost:8000/analyze/sample_cbct?scan=PostDentalSurgery"
     "pretrained_as_is": true,
     "inference_ran_in_this_request": false
   },
-  "inference_ms": 9473.5,
+  "inference_ms": 9631.3,
   "timings_ms": {
-    "load": 1871.9,
+    "load": 2427.9,
     "segmentation": null,
-    "postprocess": 2294.6,
-    "rendering": 246.1,
-    "meshing": 5061.0,
-    "total": 9473.5
+    "postprocess": 2454.9,
+    "rendering": 269.0,
+    "meshing": 4479.5,
+    "total": 9631.3
   },
   "memory": {
-    "process_rss_before_mb": 345.2,
-    "process_rss_after_mb": 598.4,
-    "process_rss_delta_mb": 253.2,
+    "process_rss_before_mb": 345.7,
+    "process_rss_after_mb": 598.0,
+    "process_rss_delta_mb": 252.3,
     "gpu_peak_allocated_mb": null
   },
   "volume_metadata": {
@@ -291,9 +298,9 @@ curl -X POST "http://localhost:8000/analyze/sample_cbct?scan=PostDentalSurgery"
 - The distance is a minimum voxel-surface Euclidean distance between label 4 and
   label 5 after 60 mm³ island filtering; it inherits the 0.5 mm voxel grid and the
   segmentation error of the label map. It is not a substitute for nerve tracing.
-- The demo `PostDentalSurgery` labels are the published reference mask, not a model
-  prediction; the demo `PreDentalSurgery` labels are model output without a
-  reference mask. Both are disclosed per request.
+- The demo `PostDentalSurgery` labels are the published reference mask after the
+  60 mm³ island filter, not a model prediction; the demo `PreDentalSurgery` labels
+  are model output without a reference mask. Both are disclosed per request.
 - DICOM ZIP ingestion strips patient tags and keeps only voxels and spacing; it
   sorts slices along the acquisition normal and does not resample oblique gantry
   tilt.
@@ -331,8 +338,8 @@ Computes:
 
 ## 7. Sample Artifacts
 
-- **2D OPG:** `samples/sample_01..05_*` each contain the input PNG, the annotated PNG, and the exact `/analyze` JSON at threshold `0.70`. Regenerate with `python generate_samples.py --weights checkpoints/best_model.pth --images <five OPGs> --names sample_01_val_1 sample_02_val_10 sample_03_val_11 sample_04_val_14 sample_05_val_21 --output samples`.
-- **3D CBCT:** `samples/cbct/` contains the two demo bundles, their MPR previews, 5 STLs, a GLB scene, the exact demo JSON, and [`PROVENANCE.md`](samples/cbct/PROVENANCE.md) with label sources, bundle hashes, external Kaggle measurements, and local demo timings. Regenerate with `python build_cbct_bundles.py && python generate_cbct_samples.py`.
+- **2D OPG:** `samples/sample_01..05_*` each contain the input PNG, the annotated PNG, and the recorded `/analyze` JSON at threshold `0.70`. Regenerate with `python generate_samples.py --weights checkpoints/best_model.pth --images <five OPGs> --names sample_01_val_1 sample_02_val_10 sample_03_val_11 sample_04_val_14 sample_05_val_21 --output samples`.
+- **3D CBCT:** `samples/cbct/` contains the two demo bundles, their MPR previews, 5 STLs, a GLB scene, the recorded demo response JSON, and [`PROVENANCE.md`](samples/cbct/PROVENANCE.md) with label sources, bundle hashes, external Kaggle measurements, and local demo timings. Regenerate with `python build_cbct_bundles.py && python generate_cbct_samples.py`.
 
 ---
 

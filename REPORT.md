@@ -10,12 +10,13 @@
 
 ## 1. Executive Summary
 
-This project delivers an end-to-end clinical decision-support prototype for **2D dental panoramic radiographs (OPGs)** and extends the same unified application (`POST /analyze`) to **3D Cone-Beam Computed Tomography (CBCT)** volumes (`.nii.gz`, `.nii`, and zipped 3D DICOM/NIfTI series). For 2D OPGs, the system ingests PNG, JPEG, and single-frame 2D DICOM (`.dcm`) formats, detects four dental finding classes (`impacted_tooth`, `caries`, `periapical_lesion`, `deep_caries`), and produces class-colored visual annotations and deterministic structured JSON reports. For 3D CBCT scans, the system segments 5 maxillofacial structures (`maxilla_upper_skull`, `mandible`, `upper_teeth`, `lower_teeth`, `mandibular_canal`), computes the minimum 3D voxel-surface distance in millimetres between label 4 (lower teeth) and label 5 (left/right mandibular canal), renders 4-panel multi-planar reconstructions (Axial, Coronal, Sagittal, 3D MIP), and exports per-upload 3D `.glb` / `.stl` surface meshes for in-browser review. Raw-volume inference is optional, fails closed with HTTP 503 when the nnU-Net weights are absent, and every response states whether inference actually ran.
+This project delivers an end-to-end clinical decision-support prototype for **2D dental panoramic radiographs (OPGs)** and extends the same unified application (`POST /analyze`) to **3D Cone-Beam Computed Tomography (CBCT)** volumes (`.nii.gz`, `.nii`, and zipped 3D DICOM/NIfTI series). For 2D OPGs, the system ingests PNG, JPEG, and single-frame 2D DICOM (`.dcm`) formats, detects four dental finding classes (`impacted_tooth`, `caries`, `periapical_lesion`, `deep_caries`), and produces class-colored visual annotations and deterministic structured JSON reports. For 3D CBCT scans, the system segments 5 maxillofacial structures (`maxilla_upper_skull`, `mandible`, `upper_teeth`, `lower_teeth`, `mandibular_canal`), computes the minimum 3D voxel-surface distance in millimetres between label 4 (lower teeth) and label 5 (mandibular canal) in each half of the volume, renders 4-panel multi-planar reconstructions (Axial, Coronal, Sagittal, Coronal MIP), and exports per-upload 3D `.glb` / `.stl` surface meshes for in-browser review. Raw-volume inference is optional, fails closed with HTTP 503 when the nnU-Net weights are absent, and every response states whether inference actually ran.
 
 The detector is **Faster R-CNN with a ResNet-50 FPN V2 backbone** (`43,271,528` total parameters; `43,046,184` trainable), initialized from official Torchvision `FasterRCNN_ResNet50_FPN_V2_Weights.COCO_V1` weights and fine-tuned on the DENTEX (MICCAI 2023) benchmark.
 - **Code & Pretrained Backbone License:** **BSD-3-Clause** (permissive, commercial-compatible software architecture).
 - **Fine-Tuned Checkpoint License:** **CC BY-NC-SA 4.0** (inherited from the DENTEX dataset; restricted to non-commercial research and evaluation unless retrained on commercially licensed clinical data).
 - **Live Demonstration:** [https://huggingface.co/spaces/surendra08/viscan-opg](https://huggingface.co/spaces/surendra08/viscan-opg)
+- **Demo Video (5–8 min, narrated):** Pending — to be recorded against this build and linked here and in the README.
 - **Model Checkpoints:** [https://huggingface.co/surendra08/viscan-opg-weights](https://huggingface.co/surendra08/viscan-opg-weights) (`best_model.pth`, `173,466,789` bytes, SHA-256: `e0b49b12f48fc71ec1f583db08f107650659571e7c2b9cbd454dbfed13b46a1f`)
 
 ---
@@ -177,7 +178,7 @@ Per Requirement R14, a second model variant was trained for `12` epochs on the s
 | `periapical_lesion` | **0.336** | 0.328 | -0.009 |
 | `deep_caries` | **0.457** | 0.365 | -0.092 |
 
-**Checkpoint Selection Rationale (`R11`):** Selecting on the primary COCO validation metric (**`Val mAP@50:95 = 0.360` at Epoch 8 for Baseline vs `0.354` at Epoch 5 for Variant**), the **Baseline (`800×1333`, `batch_size=2`)** checkpoint was chosen as the deployed model. While the `960×1600` variant improved `mAP@75` (`0.410` vs `0.383`) and `impacted_tooth` AP@50 (`0.915` vs `0.833`), its `batch_size = 1` training schedule degraded `deep_caries` AP@50 (`0.365` vs `0.457`) and overall `mAP@50:95` (`0.313` vs `0.329`) while increasing inference cost.
+**Checkpoint Selection Rationale (`R11`):** Within each run, [`train.py`](train.py) saves a checkpoint only when validation **mAP@50** improves (`val_map50 > best_map50`), so per-run checkpoint selection uses mAP@50, not mAP@50:95 (best validation mAP@50: Baseline `0.570` at Epoch 8, Variant `0.578` at Epoch 5). The **deployed run** is **Baseline (`800×1333`, `batch_size=2`)**: it has the higher held-out test mAP@50 (`0.496` vs `0.493`) and test mAP@50:95 (`0.329` vs `0.313`), while the `960×1600` variant's `batch_size = 1` schedule degraded `deep_caries` AP@50 (`0.365` vs `0.457`) and increases inference cost, despite improving `mAP@75` (`0.410` vs `0.383`) and `impacted_tooth` AP@50 (`0.915` vs `0.833`).
 
 ---
 
@@ -206,8 +207,11 @@ Across the 50 held-out test radiographs at $\tau = 0.70$, the detector produced 
 | **Repository Code & API** | Viscan OPG submission | **BSD-3-Clause** | Cleared for commercial SaaS, on-prem, and device integration. |
 | **Faster R-CNN Architecture & `COCO_V1` Pretrained Weights** | PyTorch / Torchvision | **BSD-3-Clause** | Cleared for commercial use. |
 | **DENTEX Dataset & Fine-Tuned Weights (`best_model.pth`)** | Hamamci et al. (MICCAI 2023) | **CC BY-NC-SA 4.0** | **Non-commercial research & evaluation only.** Commercial deployment requires retraining the BSD-3-Clause codebase on commercially licensed clinical data or obtaining a commercial license from the DENTEX authors. |
-| **FastAPI / Gradio / Pydicom / Pillow** | Open Source | **MIT / Apache-2.0** | Cleared for commercial use. |
+| **FastAPI / Uvicorn / Pydicom / Pillow / psutil** | Open Source | **MIT / BSD-3-Clause / HPND** | Permissive; cleared for commercial use. |
+| **PyTorch / Torchvision / NumPy / SciPy / scikit-image / trimesh / matplotlib / nibabel** | Open Source | **BSD-3-Clause / MIT / PSF-based** | Permissive; cleared for commercial use with attribution. |
+| **nnU-Net v2 (`nnunetv2`)** | Isensee et al. (*Nature Methods* 2021) | **Apache-2.0** | Cleared for commercial use with attribution. |
 | **DentalSegmentator (`Dataset112_DentalSegmentator_v100`)** | Dot et al. (*Journal of Dentistry* 2024, Zenodo `10.5281/zenodo.10829675`) | **CC BY 4.0** | **Pretrained model used as-is** for Bonus 3D CBCT track; permissive attribution license (`CC BY 4.0`). |
+| **CBCT demo volumes (`Pre`/`PostDentalSurgery`)** | 3D Slicer **CBCT Dental Surgery** sample data | **3D Slicer Contribution and Software License Agreement v1.0 (BSD-style)** | Slicer's `License.txt` states it covers data downloaded from Slicer; commercial reuse should be confirmed with the Slicer project. |
 
 ---
 
@@ -231,13 +235,13 @@ Across the 50 held-out test radiographs at $\tau = 0.70$, the detector produced 
 
 ## 11. Bonus Track: 3D CBCT Volumetric Segmentation, Nerve Clearance & Interactive 3D Meshing
 
-Following completion and verification of the end-to-end 2D OPG pipeline, the same FastAPI service (`POST /analyze` in [`service.py`](service.py) and [`cbct_pipeline.py`](cbct_pipeline.py)) and the companion Gradio Space were extended to accept 3D CBCT volumes (`.nii`, `.nii.gz`, or `.zip` archives containing a 3D DICOM series or NIfTI pair), pre-segmented 5-class label maps, and ZIP bundles containing a volume plus label map.
+Following completion and verification of the end-to-end 2D OPG pipeline, the same FastAPI service (`POST /analyze` in [`service.py`](service.py) and [`cbct_pipeline.py`](cbct_pipeline.py)) and its bundled browser UI were extended to accept 3D CBCT volumes (`.nii`, `.nii.gz`, or `.zip` archives containing a 3D DICOM series or NIfTI pair), pre-segmented 5-class label maps, and ZIP bundles containing a volume plus label map.
 
 The candidate Hugging Face Space runs on CPU without the nnU-Net stack or Zenodo weights. It therefore supports the bundled **pre-segmented** demo scans and user-uploaded label maps, while a raw CBCT upload returns **HTTP 503** with setup instructions by design. Raw-volume inference is available in a local or Docker deployment after installing `requirements-cbct.txt` and pointing `VISCAN_CBCT_WEIGHTS_DIR` at the extracted weights. No demo data is substituted for a failed raw upload.
 
 ### 11.1 Explicit Pretrained Model Disclosure
 - **Model Used:** **`DentalSegmentator`** (`Dataset112_DentalSegmentator_v100.zip`, `229,747,861` bytes, MD5 `b71cd5230168d28a4f71b078265b76be`), published by **Dot et al., *Journal of Dentistry* (2024)**, Zenodo DOI: [`10.5281/zenodo.10829675`](https://zenodo.org/records/10829675), License: **CC BY 4.0**.
-- **Usage Disclosure:** **`DentalSegmentator` (`nnUNetTrainer__nnUNetPlans__3d_fullres`, `fold_0`) is used pretrained as-is**; no fine-tuning was performed. Dot et al. report training on 470 CT/CBCT scans. Engineering in this bonus track covers 3D volumetric ingestion, DICOM/NIfTI de-identification, connected-component post-processing, minimum label-surface distance computation in physical millimetres, Marching Cubes `.stl`/`.glb` surface generation, and browser integration (`<model-viewer>` / Gradio `Model3D`). Notebook execution logs are in [`kaggle_cbct_notebook.ipynb`](kaggle_cbct_notebook.ipynb).
+- **Usage Disclosure:** **`DentalSegmentator` (`nnUNetTrainer__nnUNetPlans__3d_fullres`, `fold_0`) is used pretrained as-is**; no fine-tuning was performed. Dot et al. report training on 470 CT/CBCT scans. Engineering in this bonus track covers 3D volumetric ingestion, DICOM/NIfTI de-identification, connected-component post-processing, minimum label-surface distance computation in physical millimetres, Marching Cubes `.stl`/`.glb` surface generation, and browser integration (`<model-viewer>`). Marching Cubes requires `scikit-image`; when it is not importable the exporter falls back to a pure-NumPy exposed-voxel mesher (see §11.2 note). Notebook execution logs are in [`kaggle_cbct_notebook.ipynb`](kaggle_cbct_notebook.ipynb).
 
 ### 11.2 Two CBCT Demo Scans and Their Label Provenance
 The bonus track ships two distinct CBCT volumes from the paired Pre/Post scans distributed with 3D Slicer's **CBCT Dental Surgery** sample data ([`PreDentalSurgery`](samples/cbct/PreDentalSurgery_bundle.zip) and [`PostDentalSurgery`](samples/cbct/PostDentalSurgery_bundle.zip)). The two volumes share the same acquisition grid, but this report makes no claim that they belong to the same patient or that differences between them are clinically meaningful.
@@ -246,19 +250,19 @@ The bonus track ships two distinct CBCT volumes from the paired Pre/Post scans d
 |---|:---:|:---:|---|
 | **Volume shape / spacing** | `360 × 360 × 330` (`42,768,000` voxels) @ `0.5 mm` isotropic | `360 × 360 × 330` (`42,768,000` voxels) @ `0.5 mm` isotropic | Same grid; separate acquisitions |
 | **Raw volume NIfTI size** | `24,422,912` bytes | `35,173,024` bytes | Distinct volumes |
-| **Label source** | DentalSegmentator model output (Kaggle scan-2 run) | Official SlicerDentalSegmentator reference mask | Disclosed per API response |
+| **Label source** | DentalSegmentator model output supplied with the bundle (run not documented by an executed notebook here) | Published SlicerDentalSegmentator reference mask, after this repo's 60 mm³ island filter | Disclosed per API response |
 | **Maxilla / upper skull** | `909,001` voxels (`113.63 cm³`) | `1,446,339` voxels (`180.79 cm³`) | Post-filter counts |
 | **Mandible** | `266,188` voxels (`33.27 cm³`) | `309,895` voxels (`38.74 cm³`) | Post-filter counts |
 | **Upper teeth** | `67,160` voxels (`8.39 cm³`) | `75,300` voxels (`9.41 cm³`) | Post-filter counts |
 | **Lower teeth** | `55,954` voxels (`6.99 cm³`) | `63,081` voxels (`7.89 cm³`) | Post-filter counts |
 | **Mandibular canal** | `5,853` voxels (`0.73 cm³`) | `6,655` voxels (`0.83 cm³`) | Canal is not island-filtered |
-| **Combined `.glb` scene** | `28,740,768` bytes | `35,101,728` bytes | Regenerated with the current mesh exporter |
+| **Combined `.glb` scene** | `28,740,768` bytes | `35,101,728` bytes | Regenerated with the fallback (no `scikit-image`) mesher — see §11.4 |
 | **Dice vs reference** | Not reported (no reference mask used) | Model prediction vs reference: **0.9639 mean** | Post per-class Dice below; not a Dice of the shipped demo labels |
 
 The Post Dice values were measured in the executed Kaggle notebook by comparing
 the **model prediction** with the official reference mask. They are reproduced
 here only as an external model check; the label map shipped in the Post demo
-bundle is the reference mask itself. Per class: `maxilla_upper_skull` `0.9768`,
+bundle is that reference mask **after this repo's 60 mm³ island filter**. Per class: `maxilla_upper_skull` `0.9768`,
 `mandible` `0.9849`, `upper_teeth` `0.9867`, `lower_teeth` `0.9745`,
 `mandibular_canal` `0.8968`. Full provenance and bundle hashes are in
 [`samples/cbct/PROVENANCE.md`](samples/cbct/PROVENANCE.md).
@@ -300,18 +304,26 @@ diagnostic threshold is applied; interpreting 0.71 mm as "high risk" or 2.12 mm 
 | Checkpoint initialization | 2,131.9 ms | `checkpoint_final.pth` (`fold_0`) |
 | 3D sliding-window inference | **131,407.1 ms (131.4 s)** | 252 tiles, `step_size = 0.5`, Gaussian weighting, no mirroring |
 | Post-processing + `cKDTree` | 5,816.3 ms | 60 mm³ island filter + distance |
-| Marching Cubes meshing | 938.6 ms | 5 STL meshes + GLB scene |
+| Meshing | 938.6 ms | 5 STL meshes + GLB scene; exporter path not recorded |
 | Peak GPU VRAM allocated | **4,936.0 MB** | From `torch.cuda.max_memory_allocated()` |
 | Process CPU RSS | 2,641.8 MB (+1,270.8 MB) | Full-resolution probability buffers |
 
-The Pre scan's Kaggle run recorded `115,902.3 ms` inference and `4,724.9 MB` peak
-VRAM in the bundle's `run_metrics.json`.
+The `run_metrics.json` supplied in the Pre bundle records `115,902.3 ms` inference
+and `4,724.9 MB` peak VRAM. That file is a 50-byte declaration; the run behind it
+has no executed notebook in this repository, so those two Pre numbers are not
+independently reproduced here.
 
 #### Measured demo-artifact run (local CPU, pre-segmented bundles, no nnU-Net stage)
 | Scan | Load | Post-process | Render | Mesh | Total |
 |---|---:|---:|---:|---:|---:|
-| `PostDentalSurgery` | 1,871.9 ms | 2,294.6 ms | 246.1 ms | 5,061.0 ms | **9,473.5 ms** |
-| `PreDentalSurgery` | 1,806.7 ms | 3,248.2 ms | 247.0 ms | 4,442.8 ms | **9,744.7 ms** |
+| `PostDentalSurgery` | 2,427.9 ms | 2,454.9 ms | 269.0 ms | 4,479.5 ms | **9,631.3 ms** |
+| `PreDentalSurgery` | 1,989.4 ms | 4,018.7 ms | 252.2 ms | 4,178.3 ms | **10,438.6 ms** |
+
+These artifacts were generated on a machine without `scikit-image`, so the Mesh
+column measures the pure-NumPy fallback mesher (`_extract_exposed_voxel_mesh`),
+not Marching Cubes. The HF Space image installs `scikit-image`, so its exports use
+Marching Cubes and produce smaller GLB files than the 28.7 MB / 35.1 MB shipped
+here.
 
 These local timings include no segmentation inference; `timings_ms.segmentation`
 is `null` and `gpu_peak_allocated_mb` is `null` in the demo reports. They are not

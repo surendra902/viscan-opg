@@ -49,17 +49,19 @@ DEMO_SCAN_PROVENANCE: Dict[str, Dict[str, Any]] = {
     "PostDentalSurgery": {
         "source": "demo_reference_labelmap",
         "detail": (
-            "Shipped demo labels are the official SlicerDentalSegmentator reference mask for this "
-            "scan (https://github.com/gaudot/SlicerDentalSegmentator), not a model prediction. "
-            "No DentalSegmentator inference was run for this demo."
+            "Shipped demo labels are the published SlicerDentalSegmentator reference mask for this "
+            "scan (https://github.com/gaudot/SlicerDentalSegmentator), after this repository's "
+            "60 mm3 island filter was applied to labels 1-4. Not a model prediction; no "
+            "DentalSegmentator inference was run for this demo."
         ),
     },
     "PreDentalSurgery": {
         "source": "demo_model_labelmap",
         "detail": (
-            "Shipped demo labels were produced by DentalSegmentator nnU-Net in the Kaggle scan-2 "
-            "notebook and exported from that run. No reference mask was used for this demo, so no "
-            "Dice is reported."
+            "Shipped demo labels are DentalSegmentator nnU-Net v2 3d_fullres fold_0 model output "
+            "supplied with this bundle. The run that produced them is not documented in an "
+            "executed notebook in this repository. No reference mask was used for this demo, so "
+            "no Dice is reported."
         ),
     },
 }

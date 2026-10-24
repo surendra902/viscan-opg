@@ -6,7 +6,6 @@ Generate publication-quality 3-Page PDF report answering:
 """
 
 import os
-import shutil
 from pathlib import Path
 from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
@@ -27,7 +26,6 @@ from reportlab.pdfgen import canvas
 
 REPO_ROOT = Path(__file__).resolve().parent
 PDF_OUTPUT_1 = REPO_ROOT / "Viscan_Dataset_Usage_and_Evaluation_Report.pdf"
-PDF_OUTPUT_2 = Path(r"C:\Users\Errachandhanam\Downloads\Viscan_Dataset_Usage_and_Evaluation_Report.pdf")
 
 
 class NumberedCanvas(canvas.Canvas):
@@ -725,8 +723,8 @@ cbct_table_data = [
         Paragraph("Voxels (Demo Reference Mask)", table_header_style),
         Paragraph("Volume (cm³)", table_header_style),
         Paragraph("Model Dice vs. Reference", table_header_style),
-        Paragraph("Marching Cubes Vertices", table_header_style),
-        Paragraph("Marching Cubes Faces", table_header_style),
+        Paragraph("Mesh Vertices (GLB)", table_header_style),
+        Paragraph("Mesh Triangles", table_header_style),
     ],
     [Paragraph("1", table_cell_center), Paragraph("<b>maxilla_upper_skull</b>", table_cell_bold), Paragraph("1,446,339", table_cell_center), Paragraph("180.79", table_cell_center), Paragraph("<b>0.9768</b>", table_cell_bold_center), Paragraph("706,776", table_cell_center), Paragraph("353,388", table_cell_center)],
     [Paragraph("2", table_cell_center), Paragraph("<b>mandible</b>", table_cell_bold), Paragraph("309,895", table_cell_center), Paragraph("38.74", table_cell_center), Paragraph("<b>0.9849</b>", table_cell_bold_center), Paragraph("141,192", table_cell_center), Paragraph("70,596", table_cell_center)],
@@ -746,7 +744,9 @@ cbct_table.setStyle(TableStyle([
 story.append(cbct_table)
 story.append(Paragraph(
     "Voxel counts, volumes and mesh counts are from the reference label map shipped in the Post demo bundle. "
-    "The Dice column compares a separate model prediction with that reference; the demo request runs no inference.",
+    "The Dice column compares a separate model prediction with that reference; the demo request runs no inference. "
+    "Vertex/triangle counts were produced by this repository's fallback exposed-voxel mesher (the generation machine "
+    "had no scikit-image); the HF Space installs scikit-image, so its Marching Cubes output differs.",
     small_style,
 ))
 story.append(Spacer(1, 4))
@@ -783,10 +783,3 @@ if os.path.exists(cbct_ortho_path):
 # Build Document with NumberedCanvas
 doc.build(story, canvasmaker=NumberedCanvas)
 print(f"Generated PDF successfully at: {PDF_OUTPUT_1}")
-
-# Copy to Downloads if accessible
-try:
-    shutil.copy(str(PDF_OUTPUT_1), str(PDF_OUTPUT_2))
-    print(f"Copied to Downloads at: {PDF_OUTPUT_2}")
-except Exception as exc:
-    print(f"Note: Could not copy to Downloads: {exc}")

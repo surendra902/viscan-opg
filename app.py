@@ -15,6 +15,8 @@ import json
 from pathlib import Path
 from typing import Optional
 
+import yaml
+
 from fastapi import FastAPI, File, UploadFile, HTTPException, Query
 from fastapi.responses import JSONResponse, FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -55,12 +57,23 @@ app.add_middleware(
 app.mount("/results", StaticFiles(directory=str(RESULTS_DIR)), name="results")
 app.mount("/samples", StaticFiles(directory=str(SAMPLES_DIR)), name="samples")
 
-# Initialize analysis service
+# Initialize analysis service. The detector config is the same YAML used for training and
+# evaluation so the served score floor matches the metrics in REPORT.md.
+_CONFIG_PATH = BASE_DIR / "configs" / "baseline.yaml"
+_config = None
+if _CONFIG_PATH.is_file():
+    with _CONFIG_PATH.open("r", encoding="utf-8") as _fh:
+        _config = yaml.safe_load(_fh)
+
 weights_file = os.getenv("VISCAN_WEIGHTS_PATH", "checkpoints/best_model.pth")
 service = DentalAnalysisService(
     weights_path=weights_file if os.path.exists(weights_file) else None,
+    config=_config,
     device=os.getenv("VISCAN_DEVICE") or None,
     results_dir=str(RESULTS_DIR),
+    confidence_threshold=float(
+        (_config or {}).get("evaluation", {}).get("ui_confidence_threshold", 0.70)
+    ),
 )
 
 

@@ -1065,7 +1065,7 @@ except Exception:
 """))
 
 nb.cells = cells
-out = Path("c:/Users/Errachandhanam/Videos/1/viscan-opg/kaggle_notebook.ipynb")
+out = Path(__file__).resolve().parent / "kaggle_notebook.ipynb"
 with open(out, "w", encoding="utf-8") as f:
     nbf.write(nb, f)
 print(f"Generated {out} ({len(cells)} cells)")

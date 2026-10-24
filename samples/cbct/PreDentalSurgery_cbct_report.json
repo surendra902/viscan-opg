@@ -2,7 +2,7 @@
   "image_id": "PreDentalSurgery",
   "modality": "CBCT",
   "segmentation_source": "demo_model_labelmap",
-  "segmentation_source_detail": "Shipped demo labels were produced by DentalSegmentator nnU-Net in the Kaggle scan-2 notebook and exported from that run. No reference mask was used for this demo, so no Dice is reported.",
+  "segmentation_source_detail": "Shipped demo labels are DentalSegmentator nnU-Net v2 3d_fullres fold_0 model output supplied with this bundle. The run that produced them is not documented in an executed notebook in this repository. No reference mask was used for this demo, so no Dice is reported.",
   "demo": true,
   "model": {
     "name": "DentalSegmentator_nnUNetv2_3d_fullres",
@@ -12,19 +12,19 @@
     "pretrained_as_is": true,
     "inference_ran_in_this_request": false
   },
-  "inference_ms": 9744.7,
+  "inference_ms": 10438.6,
   "timings_ms": {
-    "load": 1806.7,
+    "load": 1989.4,
     "segmentation": null,
-    "postprocess": 3248.2,
-    "rendering": 247.0,
-    "meshing": 4442.8,
-    "total": 9744.7
+    "postprocess": 4018.7,
+    "rendering": 252.2,
+    "meshing": 4178.3,
+    "total": 10438.6
   },
   "memory": {
-    "process_rss_before_mb": 343.4,
-    "process_rss_after_mb": 590.2,
-    "process_rss_delta_mb": 246.8,
+    "process_rss_before_mb": 343.3,
+    "process_rss_after_mb": 589.6,
+    "process_rss_delta_mb": 246.3,
     "gpu_peak_allocated_mb": null
   },
   "volume_metadata": {

@@ -21,8 +21,7 @@ from reportlab.platypus import (
     PageBreak,
 )
 
-PDF_OUTPUT_1 = Path(r"c:\Users\Errachandhanam\Videos\1\viscan-opg\Viscan_OPG_Model_Evaluation_Report.pdf")
-PDF_OUTPUT_2 = Path(r"C:\Users\Errachandhanam\Downloads\Viscan_OPG_Model_Evaluation_Report.pdf")
+PDF_OUTPUT_1 = Path(__file__).resolve().parent / "Viscan_OPG_Model_Evaluation_Report.pdf"
 
 doc = SimpleDocTemplate(
     str(PDF_OUTPUT_1),
@@ -411,7 +410,7 @@ cbct_findings_text = """
 &nbsp;&nbsp;– <b>Caveat:</b> the side is a volume-side index, not verified patient laterality; the value is a voxel-surface distance on a 0.5 mm grid, not a nerve-centreline trace or a validated surgical risk score. No diagnostic threshold is applied.<br/>
 • <b>Measured Memory &amp; Latency (Kaggle NVIDIA Tesla T4 GPU, 14.56 GB VRAM, PyTorch 2.11.0+cu128):</b><br/>
 &nbsp;&nbsp;– <b>3D Sliding-Window Segmentation (252 tiles):</b> <code>131,407.1 ms</code> (<code>131.41 s</code>) | <b>Model Init:</b> <code>2,131.9 ms</code><br/>
-&nbsp;&nbsp;– <b>3D Post-Processing + cKDTree Distance:</b> <code>5,816.3 ms</code> (<code>5.82 s</code>) | <b>Marching Cubes Meshing (.stl + .glb):</b> <code>938.6 ms</code> (<code>0.94 s</code>)<br/>
+&nbsp;&nbsp;– <b>3D Post-Processing + cKDTree Distance:</b> <code>5,816.3 ms</code> (<code>5.82 s</code>) | <b>Meshing (.stl + .glb):</b> <code>938.6 ms</code> (<code>0.94 s</code>)<br/>
 &nbsp;&nbsp;– <b>Peak GPU VRAM Allocated:</b> <code>4,936.0 MB</code> (<code>4.94 GB</code>) | <b>Process CPU RSS Memory:</b> <code>2,641.8 MB</code> (<code>+1,270.8 MB</code> delta)<br/>
 • <b>Production Approach for Large CBCT Volumes (design proposal, not benchmarked in this submission):</b> (1) Direct presigned S3/GCS multipart upload with edge DICOM de-identification; (2) Async Redis/Celery task queue returning <code>202 Accepted</code> + WebSocket progress; (3) Autoscaled GPU workers with pre-warmed weights and serialized per-GPU jobs; TensorRT/FP16 and tile batching are possible optimizations, but no speed-up is claimed here; (4) Decimated/Draco-compressed <code>.glb</code> meshes served via CDN. The current exporter writes uncompressed GLB (28.7–35.1 MB for the two demo scans).
 """
@@ -425,8 +424,3 @@ if os.path.exists(cbct_img_path):
 # Build PDF
 doc.build(story)
 print(f"Generated PDF successfully at: {PDF_OUTPUT_1}")
-
-# Also copy to Downloads folder for immediate user access
-import shutil
-shutil.copy(str(PDF_OUTPUT_1), str(PDF_OUTPUT_2))
-print(f"Copied to Downloads at: {PDF_OUTPUT_2}")

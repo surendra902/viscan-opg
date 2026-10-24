@@ -7,8 +7,8 @@ declaration when someone re-uploads the bundle.
 
 | Scan | Label source in the bundle | How the labels were produced | Reported `segmentation_source` |
 |---|---|---|---|
-| `PostDentalSurgery` | Official SlicerDentalSegmentator reference mask | Published reference segmentation; no model inference in this demo | `demo_reference_labelmap` |
-| `PreDentalSurgery` | DentalSegmentator model output | nnU-Net v2 `3d_fullres` fold_0 run in the Kaggle scan-2 notebook (Tesla T4) | `demo_model_labelmap` |
+| `PostDentalSurgery` | Published SlicerDentalSegmentator reference mask, after this repo's 60 mm³ island filter | Published reference segmentation; no model inference in this demo | `demo_reference_labelmap` |
+| `PreDentalSurgery` | DentalSegmentator model output supplied with the bundle | nnU-Net v2 `3d_fullres` fold_0 weights; the run that produced it is not documented in an executed notebook in this repo | `demo_model_labelmap` |
 
 The scans are the paired Pre/Post volumes distributed with 3D Slicer's
 **CBCT Dental Surgery** sample data (also used by the SlicerDentalSegmentator
@@ -19,8 +19,8 @@ the volume differences are clinically meaningful.
 
 | Bundle | Bytes | SHA-256 |
 |---|---:|---|
-| `PostDentalSurgery_bundle.zip` | 35,593,875 | `fc07b2bd71a29b09d5aef4223dee5b4668c5c79322a7f5dde7b51a618263e0e2` |
-| `PreDentalSurgery_bundle.zip` | 24,786,219 | `c0c8465417bf029870801bcae25ce2d6638cf07e6c5dabd06c0a806a0629bbf0` |
+| `PostDentalSurgery_bundle.zip` | 35,593,920 | `dd7f8519687ce067ce6ff5cb512b19e87fa21732e4f85a1907f97c09f3917b90` |
+| `PreDentalSurgery_bundle.zip` | 24,786,261 | `d290fbe39f3ed3cc392664ccbdae2294e4abe0d204e4d6e561b2052ad6a7a8ff` |
 
 Rebuild and regenerate every artifact with:
 
@@ -33,10 +33,24 @@ python generate_cbct_samples.py
 GLB and JSON files in this directory are derived from the bundle contents rather
 than hand-copied from another scan.
 
+## Mesh exporter used for these artifacts
+
+`export_cbct_meshes` uses `skimage.measure.marching_cubes` when `scikit-image` is
+importable and otherwise falls back to `_extract_exposed_voxel_mesh`, a pure-NumPy
+exposed-voxel mesher. The artifacts in this directory were produced on a machine
+without `scikit-image`, so every STL/GLB here comes from the fallback path and the
+`Meshing` timings below measure that path. The HF Space image installs
+`scikit-image` from `requirements.txt`, so its exports use Marching Cubes; the
+shipped GLB files (28.7 MB and 35.1 MB) are larger than the Marching Cubes output
+the live Space produces for the same bundle.
+
 ## External model measurements (Kaggle Tesla T4)
 
-These numbers were measured in the `kaggle_cbct_notebook.ipynb` execution, not on
-the machine that generated the sample artifacts.
+The `PostDentalSurgery` column is transcribed from the executed
+`kaggle_cbct_notebook.ipynb`. The `PreDentalSurgery` column is transcribed from
+the `run_metrics.json` supplied inside the Pre bundle; that run has no executed
+notebook in this repository and cannot be re-inspected here. None of these
+numbers were measured on the machine that generated the sample artifacts.
 
 | Metric | `PostDentalSurgery` | `PreDentalSurgery` |
 |---|---:|---:|
@@ -45,7 +59,7 @@ the machine that generated the sample artifacts.
 | Peak GPU VRAM allocated | 4,936.0 MB | 4,724.9 MB |
 | CPU RSS during the run | 2,641.8 MB (+1,270.8 MB) | not recorded |
 | Post-processing + `cKDTree` distance | 5,816.3 ms | not recorded |
-| Marching Cubes meshing | 938.6 ms | not recorded |
+| Meshing | 938.6 ms | not recorded |
 
 The Post run also compared its **model prediction** with the official reference
 mask shipped in this demo bundle. These Dice values describe the model, not the
@@ -71,8 +85,8 @@ export only:
 
 | Scan | Load | Post-processing | Rendering | Meshing | Total |
 |---|---:|---:|---:|---:|---:|
-| `PostDentalSurgery` | 1,871.9 ms | 2,294.6 ms | 246.1 ms | 5,061.0 ms | 9,473.5 ms |
-| `PreDentalSurgery` | 1,806.7 ms | 3,248.2 ms | 247.0 ms | 4,442.8 ms | 9,744.7 ms |
+| `PostDentalSurgery` | 2,427.9 ms | 2,454.9 ms | 269.0 ms | 4,479.5 ms | 9,631.3 ms |
+| `PreDentalSurgery` | 1,989.4 ms | 4,018.7 ms | 252.2 ms | 4,178.3 ms | 10,438.6 ms |
 
 The JSON reports record `model.inference_ran_in_this_request = false`,
 `timings_ms.segmentation = null`, and `memory.gpu_peak_allocated_mb = null` for

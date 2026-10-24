@@ -12,7 +12,7 @@
 
 ## 2. Scope of AI Usage
 The assistant was used in a collaborative pair-programming and code-audit capacity for:
-1. **Scaffolding and Boilerplate:** Drafting boilerplate code for the FastAPI backend, Gradio interface, PyTorch Dataset collate functions, and `pycocotools` metric calculation wrappers.
+1. **Scaffolding and Boilerplate:** Drafting boilerplate code for the FastAPI backend and its inline HTML/JS UI, PyTorch Dataset collate functions, and `pycocotools` metric calculation wrappers.
 2. **Codebase Verification & Audit Remediation:** Cross-checking notebook execution outputs (`kaggle_notebook.ipynb`) against repository scripts (`prepare_data.py`, `train.py`, `evaluate.py`, `imaging.py`, `input_gate.py`, `service.py`, `app.py`), fixing DICOM Modality LUT precede-VOI-LUT ordering, negative-origin bounding box clipping, HTTP 503 fail-closed behavior when model weights are missing, and input gate radiographic heuristics.
 3. **Documentation, Report Generation & Test Fixtures:** Formatting `REPORT.md` and ReportLab PDF generation scripts (`generate_pdf_report.py`, `generate_dataset_evaluation_pdf.py`) using verified metrics and plot outputs extracted directly from the executed Kaggle training notebook, and writing `pytest` unit and regression tests.
 
