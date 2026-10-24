@@ -14,11 +14,12 @@ An end-to-end clinical decision-support prototype for automated finding detectio
 
 ## 1. Key Capabilities
 
-- **Core Pathology Detection:** Detects `caries`, `deep_caries`, `periapical_lesion`, and `impacted_tooth`.
-- **Multi-Modality Ingestion:** Supports standard images (PNG, JPEG) and single-frame 2D DICOM (`.dcm`) with automatic windowing, VOI LUT, MONOCHROME1 polarity inversion, and patient de-identification.
-- **Input Validity Gate:** Identifies and rejects non-dental or unreadable uploads before inference.
-- **Decision Support API & UI:** FastAPI backend with `POST /analyze` and an interactive side-by-side web UI for clinician review.
-- **Deterministic Reporting:** Structured JSON output matching clinical schema requirements with mandatory disclaimer.
+- **Core 2D OPG Pathology Detection:** Detects `caries`, `deep_caries`, `periapical_lesion`, and `impacted_tooth` with original pixel coordinates and confidence scores.
+- **Bonus 3D CBCT Volumetric Extension:** Accepts 3D CBCT volumes (`.nii.gz`, `.nii`, or `.zip` 3D DICOM/NIfTI series), segments 5 anatomical structures (`maxilla_upper_skull`, `mandible`, `upper_teeth`, `lower_teeth`, `mandibular_canal`) via **pretrained `DentalSegmentator` (`nnU-Net 3d_fullres`, CC BY 4.0, used as-is)**, computes exact 3D Euclidean millimeter clearance between lower teeth roots and the left/right mandibular canal (`0.71 mm` right, `1.58 mm` left on `PostDentalSurgery`), and exports interactive `.glb` / `.stl` 3D meshes rendered directly in the browser (`<model-viewer>` / WebGL).
+- **Multi-Modality Ingestion:** Supports standard images (PNG, JPEG), single-frame 2D DICOM (`.dcm`) with Modality LUT + VOI LUT windowing and MONOCHROME1 polarity inversion, and 3D NIfTI / zipped 3D DICOM series with automatic patient de-identification.
+- **Input Validity Gate:** Identifies and rejects non-dental, blank, or text-document uploads before inference.
+- **Decision Support API & UI:** Unified FastAPI backend (`POST /analyze` and `POST /analyze/sample_cbct`) and interactive web UI for 2D & 3D clinician review.
+- **Deterministic Reporting:** Structured JSON output matching clinical schema requirements (2D `bbox` or 3D `bbox_3d_voxel` / physical `mm` coordinates) with mandatory disclaimer.
 
 ---
 
@@ -72,9 +73,10 @@ docker run -p 8000:8000 viscan-opg
 
 ## 4. Pre-trained Weights & Integrity Verification
 
-| File | Size | SHA256 | Repository / Download | License |
+| File | Size | SHA256 / Checksum | Repository / Download | License |
 |---|---|---|---|---|
-| `best_model.pth` | 173,466,789 bytes (173.5 MB) | `e0b49b12f48fc71ec1f583db08f107650659571e7c2b9cbd454dbfed13b46a1f` | [Hugging Face Hub](https://huggingface.co/surendra08/viscan-opg-weights) · [Direct Download](https://huggingface.co/surendra08/viscan-opg-weights/resolve/main/best_model.pth) | **CC BY-NC-SA 4.0** |
+| `best_model.pth` (2D OPG Faster R-CNN) | 173,466,789 bytes (173.5 MB) | `e0b49b12f48fc71ec1f583db08f107650659571e7c2b9cbd454dbfed13b46a1f` | [Hugging Face Hub](https://huggingface.co/surendra08/viscan-opg-weights) · [Direct Download](https://huggingface.co/surendra08/viscan-opg-weights/resolve/main/best_model.pth) | **CC BY-NC-SA 4.0** |
+| `Dataset112_DentalSegmentator_v100.zip` (3D CBCT nnU-Net, used pretrained as-is) | 229,747,861 bytes (219.1 MB) | MD5: `b71cd5230168d28a4f71b078265b76be` | [Zenodo DOI 10.5281/zenodo.10829675](https://zenodo.org/records/10829675) (Dot et al., *J. Dentistry* 2024) | **CC BY 4.0** |
 
 > **License Disclosure:**
 > - The application source code, API service, Dockerfile, and architecture definitions are licensed under the permissive **BSD-3-Clause** license.
@@ -134,6 +136,54 @@ curl -X POST "http://localhost:8000/analyze?confidence_threshold=0.70" \
   "summary": "2 findings: 1 deep caries, 1 periapical lesion.",
   "original_image_url": "/results/opg_a1b2c3d4_original.png",
   "annotated_image_url": "/results/opg_a1b2c3d4_annotated.png",
+  "disclaimer": "AI-assisted findings for dentist review. Not a diagnosis."
+}
+```
+
+### 3D CBCT Analysis (`POST /analyze` or `POST /analyze/sample_cbct`)
+Accepts `.nii.gz`, `.nii`, or `.zip` (3D DICOM series or NIfTI bundle) and returns 5-class 3D segmentation statistics, 3D mandibular canal nerve clearance findings (`mm` + 3D voxel bounding boxes), orthogonal slice previews, and interactive `.glb` / `.stl` mesh URLs:
+```bash
+curl -X POST "http://localhost:8000/analyze" \
+     -F "file=@samples/cbct/PostDentalSurgery_Segmentation.nii.gz"
+```
+**Response (3D CBCT JSON):**
+```json
+{
+  "image_id": "PostDentalSurgery",
+  "modality": "CBCT_3D",
+  "model": {
+    "name": "dentalsegmentator_nnunet_3d_fullres",
+    "version": "1.0.0",
+    "source": "Pretrained as-is (Dot et al., Journal of Dentistry 2024, Zenodo 10829675, CC BY 4.0)"
+  },
+  "volume_shape": [360, 360, 330],
+  "voxel_spacing_mm": [0.5, 0.5, 0.5],
+  "inference_ms": 131407.1,
+  "postprocess_ms": 5816.3,
+  "mesh_generation_ms": 938.6,
+  "memory_mb": {
+    "gpu_peak_allocated_mb": 4936.0,
+    "cpu_rss_mb": 2641.8
+  },
+  "findings": [
+    {
+      "class": "mandibular_canal_to_lower_teeth_clearance",
+      "hemimandible": "right",
+      "min_distance_mm": 0.71,
+      "closest_lower_tooth_voxel": [119, 151, 89],
+      "closest_canal_voxel": [118, 151, 88],
+      "bbox_3d_voxel": [108, 141, 78, 129, 161, 99]
+    },
+    {
+      "class": "mandibular_canal_to_lower_teeth_clearance",
+      "hemimandible": "left",
+      "min_distance_mm": 1.58,
+      "closest_lower_tooth_voxel": [235, 132, 75],
+      "closest_canal_voxel": [236, 132, 72],
+      "bbox_3d_voxel": [225, 122, 62, 246, 142, 85]
+    }
+  ],
+  "mesh_glb_url": "/results/PostDentalSurgery_scene.glb",
   "disclaimer": "AI-assisted findings for dentist review. Not a diagnosis."
 }
 ```

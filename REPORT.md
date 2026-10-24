@@ -1,7 +1,7 @@
 # Viscan Technical Report: Automated Dental Finding Detection in Panoramic Radiographs (OPG)
 
 **Candidate:** Surendra Goud | AI Engineer (Round 2 Take-Home Assessment)  
-**Target Modality:** 2D Panoramic Radiograph (OPG)  
+**Target Modality:** 2D Panoramic Radiograph (OPG) + Bonus 3D CBCT (NIfTI / 3D DICOM Series)  
 **Deliverable Type:** Technical Report & Model Evaluation  
 
 > **Clinical Disclaimer:** AI-assisted findings for dentist review. Not a diagnosis.
@@ -10,7 +10,7 @@
 
 ## 1. Executive Summary
 
-This project delivers an end-to-end clinical decision-support prototype for 2D dental panoramic radiographs (OPGs). The system ingests OPGs in PNG, JPEG, and single-frame 2D DICOM (`.dcm`) formats, detects four dental finding classes (`impacted_tooth`, `caries`, `periapical_lesion`, `deep_caries`), and produces class-colored visual annotations and deterministic structured JSON reports for dentist review.
+This project delivers an end-to-end clinical decision-support prototype for **2D dental panoramic radiographs (OPGs)** and extends the same unified application (`POST /analyze`) to **3D Cone-Beam Computed Tomography (CBCT)** volumes (`.nii.gz`, `.nii`, and zipped 3D DICOM/NIfTI series). For 2D OPGs, the system ingests PNG, JPEG, and single-frame 2D DICOM (`.dcm`) formats, detects four dental finding classes (`impacted_tooth`, `caries`, `periapical_lesion`, `deep_caries`), and produces class-colored visual annotations and deterministic structured JSON reports. For 3D CBCT scans, the system segments 5 maxillofacial structures (`maxilla_upper_skull`, `mandible`, `upper_teeth`, `lower_teeth`, `mandibular_canal`), computes exact 3D physical millimeter clearance between the lower teeth roots and the left/right mandibular canal (`inferior alveolar nerve`), renders 4-panel multi-planar reconstructions (Axial, Coronal, Sagittal, 3D MIP), and exports interactive 3D `.glb` / `.stl` surface meshes for in-browser review.
 
 The detector is **Faster R-CNN with a ResNet-50 FPN V2 backbone** (`43,271,528` total parameters; `43,046,184` trainable), initialized from official Torchvision `FasterRCNN_ResNet50_FPN_V2_Weights.COCO_V1` weights and fine-tuned on the DENTEX (MICCAI 2023) benchmark.
 - **Code & Pretrained Backbone License:** **BSD-3-Clause** (permissive, commercial-compatible software architecture).
@@ -207,6 +207,7 @@ Across the 50 held-out test radiographs at $\tau = 0.70$, the detector produced 
 | **Faster R-CNN Architecture & `COCO_V1` Pretrained Weights** | PyTorch / Torchvision | **BSD-3-Clause** | Cleared for commercial use. |
 | **DENTEX Dataset & Fine-Tuned Weights (`best_model.pth`)** | Hamamci et al. (MICCAI 2023) | **CC BY-NC-SA 4.0** | **Non-commercial research & evaluation only.** Commercial deployment requires retraining the BSD-3-Clause codebase on commercially licensed clinical data or obtaining a commercial license from the DENTEX authors. |
 | **FastAPI / Gradio / Pydicom / Pillow** | Open Source | **MIT / Apache-2.0** | Cleared for commercial use. |
+| **DentalSegmentator (`Dataset112_DentalSegmentator_v100`)** | Dot et al. (*Journal of Dentistry* 2024, Zenodo `10.5281/zenodo.10829675`) | **CC BY 4.0** | **Pretrained model used as-is** for Bonus 3D CBCT track; permissive attribution license (`CC BY 4.0`). |
 
 ---
 
@@ -224,4 +225,53 @@ Across the 50 held-out test radiographs at $\tau = 0.70$, the detector produced 
 1. **Class-Balanced Loss & Oversampling:** Replace standard cross-entropy in the RoI head with Focal Loss / repeat-factor sampling for `periapical_lesion` and `deep_caries`, and use gradient accumulation (`accum_steps = 2`) at `960×1600` to eliminate batch-size-1 gradient noise.
 2. **FDI Tooth Enumeration Integration:** Train a second stage on DENTEX's quadrant-enumeration annotations (`11`–`48`) and spatially join detected lesions to tooth polygons via IoU/centroid containment to populate `tooth_fdi`.
 3. **ONNX Runtime & INT8 Quantization:** Export the ResNet-50 FPN V2 checkpoint to ONNX Runtime with dynamic quantization to reduce 2-vCPU latency from `4.6s` toward sub-second interactive response.
-4. **3D CBCT Volumetric Extension:** Add a separate async worker pipeline using 3D patch-based nnU-Net (`DentalSegmentator`) for NIfTI / multiframe 3D CBCT volumes.
+4. **3D CBCT Individual Tooth Instance Labelling:** Combine `DentalSegmentator`'s semantic 5-class output with ToothFairy2 instance segmentation to report per-FDI-tooth (`38`/`48`) third-molar impaction angles alongside mandibular canal clearance.
+
+---
+
+## 11. Bonus Track: 3D CBCT Volumetric Segmentation, Nerve Clearance & Interactive 3D Meshing
+
+Following completion and verification of the end-to-end 2D OPG pipeline, the same FastAPI service (`POST /analyze` in [`service.py`](service.py) and [`cbct_pipeline.py`](cbct_pipeline.py)) and Gradio Hugging Face Space ([`hf_space/app.py`](hf_space/app.py)) were extended to accept 3D CBCT volumes (`.nii.gz`, `.nii`, or `.zip` archives containing a 3D DICOM series or NIfTI pair).
+
+### 11.1 Explicit Pretrained Model Disclosure
+- **Model Used:** **`DentalSegmentator`** (`Dataset112_DentalSegmentator_v100.zip`, `229,747,861` bytes, MD5 `b71cd5230168d28a4f71b078265b76be`), published by **Dot et al., *Journal of Dentistry* (2024)**, Zenodo DOI: [`10.5281/zenodo.10829675`](https://zenodo.org/records/10829675), License: **CC BY 4.0**.
+- **Usage Disclosure:** We explicitly disclose that **`DentalSegmentator` (`nnUNetTrainer__nnUNetPlans__3d_fullres`, `fold_0`) is used pretrained as-is** (trained by Dot et al. on 470 multi-center CT and CBCT scans). All engineering in this bonus track focuses on 3D volumetric ingestion, DICOM/NIfTI de-identification, connected-component post-processing, exact 3D Euclidean nerve-to-root distance computation in physical millimeters, Marching Cubes `.stl`/`.glb` surface generation, and interactive browser integration (`<model-viewer>` / Three.js WebGL). Full execution logs are preserved in [`kaggle_cbct_notebook.ipynb`](kaggle_cbct_notebook.ipynb).
+
+### 11.2 3D Segmentation Verification & Mesh Geometry (`PostDentalSurgery` CBCT Volume)
+Evaluated on the public post-dental-surgery CBCT benchmark volume from `SlicerDentalSegmentator` (`360 × 360 × 330` voxels = `42,768,000` voxels at `0.5 × 0.5 × 0.5 mm` isotropic spacing; physical field-of-view `180.0 × 180.0 × 165.0 mm`), `nnUNetv2` 3D full-resolution sliding-window inference followed by $60\text{ mm}^3$ (`480`-voxel) connected-component island filtering on bony/dental classes (`1`–`4`) achieved a **mean 5-class 3D Dice coefficient of `0.9639`** against the official reference segmentation:
+
+| Class ID | Anatomical Structure | Post-Filtered Voxels | Volume ($\text{cm}^3$) | 3D Dice vs. Reference | Marching Cubes Vertices | Marching Cubes Faces |
+|:---:|---|---:|---:|:---:|---:|---:|
+| `1` | `maxilla_upper_skull` | 1,476,019 | 184.50 | **0.9768** | 181,032 | 366,752 |
+| `2` | `mandible` | 310,556 | 38.82 | **0.9849** | 35,515 | 71,934 |
+| `3` | `upper_teeth` | 75,590 | 9.45 | **0.9867** | 9,610 | 19,240 |
+| `4` | `lower_teeth` | 62,663 | 7.83 | **0.9745** | 8,530 | 17,068 |
+| `5` | `mandibular_canal` | 6,063 | 0.76 | **0.8968** | 1,736 | 3,456 |
+| — | **Total / Mean** | **1,930,891** | **241.36** | **0.9639** | **236,423** | **478,450** |
+
+### 11.3 Clinically Useful 3D Finding & Unified JSON Report Schema
+To assist preoperative third-molar and mandibular surgery planning, [`cbct_pipeline.py`](cbct_pipeline.py) extracts the 1-voxel morphological boundary surfaces of `lower_teeth` (`Class 4`) and `mandibular_canal` (`Class 5`), partitions the canal into Left and Right hemimandibles along the mid-sagittal plane ($x = 180$), converts voxel indices $(i, j, k)$ into physical millimeter coordinates $(i \cdot s_x, j \cdot s_y, k \cdot s_z)$, and queries a `scipy.spatial.cKDTree` to find the exact minimum 3D Euclidean clearance ($d_{\min}$):
+- **Right Hemimandible (`mandibular_canal_to_lower_teeth_clearance`):** **`min_distance_mm = 0.71 mm`** (`< 1.0 mm` high-proximity surgical alert) between `closest_lower_tooth_voxel = [119, 151, 89]` (`[59.5, 75.5, 44.5] mm`) and `closest_canal_voxel = [118, 151, 88]` (`[59.0, 75.5, 44.0] mm`), `bbox_3d_voxel = [108, 141, 78, 129, 161, 99]`, `key_slices = {"sagittal_x": 118, "coronal_y": 151, "axial_z": 88}`.
+- **Left Hemimandible (`mandibular_canal_to_lower_teeth_clearance`):** **`min_distance_mm = 1.58 mm`** (`1.0–2.0 mm` close proximity) between `closest_lower_tooth_voxel = [235, 132, 75]` (`[117.5, 66.0, 37.5] mm`) and `closest_canal_voxel = [236, 132, 72]` (`[118.0, 66.0, 36.0] mm`), `bbox_3d_voxel = [225, 122, 62, 246, 142, 85]`, `key_slices = {"sagittal_x": 236, "coronal_y": 132, "axial_z": 72}`.
+
+![3D CBCT Multi-Planar Reconstruction & Mandibular Canal Clearance](assets/eval/cbct_ortho_preview.png)
+
+### 11.4 Measured Memory Use, Inference Latency & Production Architecture for Large CBCT Volumes
+
+#### Empirical Benchmark on Kaggle Tesla T4 GPU (`PostDentalSurgery`, `360 × 360 × 330` voxels)
+| Stage / Resource Metric | Measured Value | Hardware / Execution Notes |
+|---|:---:|---|
+| **GPU Hardware Platform** | **NVIDIA Tesla T4 (14.56 GB VRAM)** | 4 vCPUs, 31.35 GB System RAM, PyTorch `2.11.0+cu128` |
+| **Model Checkpoint Initialization** | **2,131.9 ms (2.13 s)** | Loading `checkpoint_final.pth` (`fold_0`) onto `cuda:0` |
+| **3D Sliding-Window Inference (`252` tiles)** | **131,407.1 ms (131.41 s)** | `3d_fullres` Gaussian-weighted patch aggregation (`step_size = 0.5`) + NIfTI export |
+| **3D Post-Processing & `cKDTree` Distance** | **5,816.3 ms (5.82 s)** | $60\text{ mm}^3$ island filtering (`scipy.ndimage.label`) + physical millimeter nerve distance |
+| **3D Marching Cubes Meshing (`.stl` + `.glb`)** | **938.6 ms (0.94 s)** | 5 binary `.stl` meshes + combined `12.08 MB` glTF 2.0 `.glb` scene (`step_size = 2`) |
+| **Peak GPU VRAM Allocated / Reserved** | **4,936.0 MB / 5,112.0 MB** | `4.94 GB` peak VRAM allocated during 3D patch aggregation |
+| **Process CPU RSS Memory** | **2,641.8 MB (+1,270.8 MB delta)** | Host RAM required for full-resolution 3D probabilities and volume buffers |
+
+#### How We Would Run Large 3D CBCT Volumes in Production
+Because clinical CBCT scans are `100–500 MB` (`40M–125M` voxels) and require `~5 GB` GPU VRAM and `~20–130 s` of 3D sliding-window compute, running synchronous inference inside a web worker causes HTTP timeouts and OOM crashes. A production deployment separates ingestion, GPU inference, and 3D visualization into four stages:
+1. **Direct Presigned Object-Store Ingestion & Edge De-Identification:** The browser uploads `.nii.gz` or zipped DICOM series directly to S3/GCS via multipart presigned URLs, stripping DICOM patient tags (`PatientName`, `PatientID`, `BirthDate`, `InstitutionName`) before storage.
+2. **Asynchronous Job Queue (`POST /jobs/cbct` $\rightarrow$ `202 Accepted`):** The FastAPI gateway enqueues a job payload into Redis / Celery (or Cloud Tasks) and streams progress events (`queued` $\rightarrow$ `preprocessing` $\rightarrow$ `gpu_sliding_window` $\rightarrow$ `meshing` $\rightarrow$ `completed`) to the UI over WebSockets/SSE.
+3. **Pre-Warmed GPU Worker Pool with TensorRT / FP16 Batching:** Dedicated GPU workers (e.g., NVIDIA L4 24 GB or T4 16 GB on Kubernetes with KEDA queue-depth autoscaling) keep `DentalSegmentator` weights pinned in VRAM (`0 ms` cold start) and compile the 3D U-Net encoder/decoder with TensorRT FP16, batching `4–8` sliding-window 3D tiles per forward pass to reduce 252-tile inference latency from `131 s` on T4 down to `~18–25 s` on L4.
+4. **Draco-Compressed `.glb` CDN Delivery:** Marching Cubes meshes are decimated/Draco-compressed (`12 MB` $\rightarrow$ `~1.5 MB`) and served via CDN with immutable content hashes for zero-latency 60 FPS WebGL rendering in `<model-viewer>` / `vtk.js` / `three.js`.

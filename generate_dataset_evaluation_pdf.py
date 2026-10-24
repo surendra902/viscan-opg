@@ -694,6 +694,76 @@ disclaimer_table.setStyle(TableStyle([
 ]))
 story.append(disclaimer_table)
 
+# =========================================================================
+# PAGE 4: BONUS 3D CBCT VOLUMETRIC EXTENSION
+# =========================================================================
+story.append(PageBreak())
+story.append(Paragraph("9. Bonus Track: 3D CBCT Volumetric Segmentation, Nerve Clearance & Production Architecture", h1_style))
+story.append(Paragraph(
+    "Following completion of the 2D OPG pipeline, the same application (<code>POST /analyze</code>) and UI were extended to process 3D CBCT scans "
+    "(<code>.nii.gz</code>, <code>.nii</code>, and zipped 3D DICOM/NIfTI series). We explicitly disclose that <b>DentalSegmentator</b> "
+    "(<code>Dataset112_DentalSegmentator_v100</code>, Dot et al., <i>Journal of Dentistry</i> 2024, Zenodo DOI <code>10.5281/zenodo.10829675</code>, "
+    "License: <b>CC BY 4.0</b>, <code>nnUNetTrainer__nnUNetPlans__3d_fullres</code>, <code>fold_0</code>, trained on 470 CT/CBCT scans) is used <b>pretrained as-is</b>.",
+    body_style
+))
+story.append(Spacer(1, 3))
+
+cbct_table_data = [
+    [
+        Paragraph("Class ID", table_header_style),
+        Paragraph("Anatomical Structure", table_header_style),
+        Paragraph("Post-Filtered Voxels", table_header_style),
+        Paragraph("Volume (cm³)", table_header_style),
+        Paragraph("3D Dice vs. Reference", table_header_style),
+        Paragraph("Marching Cubes Vertices", table_header_style),
+        Paragraph("Marching Cubes Faces", table_header_style),
+    ],
+    [Paragraph("1", table_cell_center), Paragraph("<b>maxilla_upper_skull</b>", table_cell_bold), Paragraph("1,476,019", table_cell_center), Paragraph("184.50", table_cell_center), Paragraph("<b>0.9768</b>", table_cell_bold_center), Paragraph("181,032", table_cell_center), Paragraph("366,752", table_cell_center)],
+    [Paragraph("2", table_cell_center), Paragraph("<b>mandible</b>", table_cell_bold), Paragraph("310,556", table_cell_center), Paragraph("38.82", table_cell_center), Paragraph("<b>0.9849</b>", table_cell_bold_center), Paragraph("35,515", table_cell_center), Paragraph("71,934", table_cell_center)],
+    [Paragraph("3", table_cell_center), Paragraph("<b>upper_teeth</b>", table_cell_bold), Paragraph("75,590", table_cell_center), Paragraph("9.45", table_cell_center), Paragraph("<b>0.9867</b>", table_cell_bold_center), Paragraph("9,610", table_cell_center), Paragraph("19,240", table_cell_center)],
+    [Paragraph("4", table_cell_center), Paragraph("<b>lower_teeth</b>", table_cell_bold), Paragraph("62,663", table_cell_center), Paragraph("7.83", table_cell_center), Paragraph("<b>0.9745</b>", table_cell_bold_center), Paragraph("8,530", table_cell_center), Paragraph("17,068", table_cell_center)],
+    [Paragraph("5", table_cell_center), Paragraph("<b>mandibular_canal</b>", table_cell_bold), Paragraph("6,063", table_cell_center), Paragraph("0.76", table_cell_center), Paragraph("<b>0.8968</b>", table_cell_bold_center), Paragraph("1,736", table_cell_center), Paragraph("3,456", table_cell_center)],
+    [Paragraph("—", table_cell_center), Paragraph("<b>Total / Mean</b>", table_cell_bold), Paragraph("<b>1,930,891</b>", table_cell_bold_center), Paragraph("<b>241.36</b>", table_cell_bold_center), Paragraph("<b>0.9639</b>", table_cell_bold_center), Paragraph("<b>236,423</b>", table_cell_bold_center), Paragraph("<b>478,450</b>", table_cell_bold_center)],
+]
+
+cbct_table = Table(cbct_table_data, colWidths=[0.6 * inch, 1.5 * inch, 1.15 * inch, 0.9 * inch, 1.15 * inch, 1.15 * inch, 1.15 * inch])
+cbct_table.setStyle(TableStyle([
+    ("BACKGROUND", (0, 0), (-1, 0), PRIMARY),
+    ("GRID", (0, 0), (-1, -1), 0.5, BORDER_COLOR),
+    ("PADDING", (0, 0), (-1, -1), 3),
+    ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, BG_LIGHT]),
+]))
+story.append(cbct_table)
+story.append(Spacer(1, 4))
+
+cbct_summary_boxes = [
+    [
+        Paragraph("<b>3D Clinical Findings (<code>PostDentalSurgery</code>, 360×360×330 @ 0.5 mm)</b><br/>"
+                  "• <b>Finding Type:</b> <code>mandibular_canal_to_lower_teeth_clearance</code> (<code>cKDTree</code> in mm)<br/>"
+                  "• <b>Right Hemimandible:</b> <b>0.71 mm</b> (&lt;1.0 mm surgical alert; tooth voxel <code>[119,151,89]</code> to canal <code>[118,151,88]</code>, <code>bbox_3d=[108,141,78,129,161,99]</code>)<br/>"
+                  "• <b>Left Hemimandible:</b> <b>1.58 mm</b> (close proximity; tooth voxel <code>[235,132,75]</code> to canal <code>[236,132,72]</code>, <code>bbox_3d=[225,122,62,246,142,85]</code>)<br/>"
+                  "• <b>3D Browser View &amp; Export:</b> Interactive <code>&lt;model-viewer&gt;</code> WebGL <code>.glb</code> scene (<code>12.08 MB</code>) + 5 binary <code>.stl</code> files", body_style),
+        Paragraph("<b>Measured Memory, Latency &amp; Production Design (Kaggle Tesla T4 GPU)</b><br/>"
+                  "• <b>3D Inference (252 tiles):</b> <code>131,407.1 ms</code> (<code>131.41 s</code>) | <b>Init:</b> <code>2,131.9 ms</code><br/>"
+                  "• <b>Post-Processing + cKDTree:</b> <code>5,816.3 ms</code> | <b>Meshing (.stl/.glb):</b> <code>938.6 ms</code><br/>"
+                  "• <b>Peak GPU VRAM:</b> <code>4,936.0 MB</code> (<code>4.94 GB</code>) | <b>CPU RSS:</b> <code>2,641.8 MB</code><br/>"
+                  "• <b>Production Architecture:</b> Presigned S3/GCS upload + edge DICOM de-ID → Async Redis/Celery queue (<code>202 Accepted</code> + WebSockets) → Pre-warmed L4/T4 GPU pool with TensorRT FP16 tile batching (~20s) → Draco <code>.glb</code> CDN", body_style),
+    ]
+]
+cbct_box_table = Table(cbct_summary_boxes, colWidths=[3.8 * inch, 3.8 * inch])
+cbct_box_table.setStyle(TableStyle([
+    ("BACKGROUND", (0, 0), (-1, -1), BG_LIGHT),
+    ("BOX", (0, 0), (-1, -1), 1, BORDER_COLOR),
+    ("PADDING", (0, 0), (-1, -1), 4),
+    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+]))
+story.append(cbct_box_table)
+story.append(Spacer(1, 4))
+
+cbct_ortho_path = str(REPO_ROOT / "assets" / "eval" / "cbct_ortho_preview.png")
+if os.path.exists(cbct_ortho_path):
+    story.append(RLImage(cbct_ortho_path, width=7.4 * inch, height=3.65 * inch))
+
 # Build Document with NumberedCanvas
 doc.build(story, canvasmaker=NumberedCanvas)
 print(f"Generated PDF successfully at: {PDF_OUTPUT_1}")

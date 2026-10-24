@@ -28,6 +28,8 @@ subagent_*.txt
 # Results & Intermediate
 results/*.png
 results/*.json
+results/*.glb
+results/*.stl
 !samples/
 _tmp/
 hf_space/

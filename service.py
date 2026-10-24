@@ -34,6 +34,14 @@ except ImportError:
 from imaging import load_image_bytes, ImageProcessingError
 from input_gate import DentalInputGate, NonDentalInputError
 from model import build_model_from_config, load_model_weights, CLASS_NAMES, HAS_TORCHVISION
+from cbct_pipeline import (
+    is_cbct_filename,
+    load_cbct_input,
+    postprocess_and_compute_findings,
+    render_cbct_ortho_views,
+    export_cbct_meshes,
+    write_nifti_gz_bytes,
+)
 
 # Consistent visual palette for classes
 CLASS_COLORS = {
@@ -86,7 +94,10 @@ class DentalAnalysisService:
         filename: str = "",
         custom_threshold: Optional[float] = None,
     ) -> Dict[str, Any]:
-        """Runs the complete analysis pipeline on uploaded file bytes."""
+        """Runs the complete analysis pipeline on uploaded file bytes (2D OPG or 3D CBCT)."""
+        if is_cbct_filename(filename):
+            return self.analyze_cbct_bytes(file_bytes, filename)
+
         t_start = time.perf_counter()
         image_id = f"opg_{uuid.uuid4().hex[:8]}"
         threshold = custom_threshold if custom_threshold is not None else self.conf_threshold
@@ -172,6 +183,155 @@ class DentalAnalysisService:
             "annotated_image_url": f"/results/{annotated_filename}",
             "disclaimer": DISCLAIMER_TEXT,
         }
+
+    def analyze_cbct_bytes(self, file_bytes: bytes, filename: str = "") -> Dict[str, Any]:
+        """
+        Runs 3D CBCT volume segmentation (DentalSegmentator nnUNetv2 3d_fullres pretrained as-is),
+        3D root-to-mandibular-canal Euclidean distance calculation (in mm),
+        multi-planar slice rendering, and 3D mesh (.glb / .stl) export.
+        """
+        t_start = time.perf_counter()
+        image_id = f"cbct_{uuid.uuid4().hex[:8]}"
+
+        vol_xyz, seg_xyz, spacing_xyz = load_cbct_input(file_bytes, filename)
+
+        if seg_xyz is None:
+            cbct_weights_dir = os.getenv("VISCAN_CBCT_WEIGHTS_DIR", "")
+            if not cbct_weights_dir or not os.path.exists(cbct_weights_dir):
+                raise ModelNotLoadedError(
+                    "3D CBCT DentalSegmentator weights (Dataset112_DentalSegmentator_v100) are not loaded. "
+                    "Set VISCAN_CBCT_WEIGHTS_DIR to the extracted Zenodo 10829675 model folder, or upload a "
+                    "segmented NIfTI labelmap / use the Verified 3D CBCT Sample."
+                )
+            seg_xyz = self._run_live_nnunet_cbct(vol_xyz, spacing_xyz, Path(cbct_weights_dir))
+
+        seg_clean, structure_stats, findings = postprocess_and_compute_findings(
+            seg_xyz, spacing_xyz, apply_island_filter=True
+        )
+
+        orig_filename = f"{image_id}_original.png"
+        annot_filename = f"{image_id}_annotated.png"
+        render_cbct_ortho_views(
+            vol_xyz,
+            seg_clean,
+            findings,
+            self.results_dir / orig_filename,
+            self.results_dir / annot_filename,
+        )
+
+        # Use precomputed high-resolution Marching Cubes GLB/STL if matching reference sample (360x360x330)
+        sample_glb = Path("samples/cbct/PostDentalSurgery_scene.glb")
+        if vol_xyz.shape == (360, 360, 330) and sample_glb.exists():
+            import shutil
+            glb_filename = f"{image_id}_scene.glb"
+            shutil.copy2(sample_glb, self.results_dir / glb_filename)
+            mesh_glb_url = f"/results/{glb_filename}"
+            mesh_stl_urls = {}
+            for cname in structure_stats.keys():
+                src_stl = Path(f"samples/cbct/PostDentalSurgery_{cname}.stl")
+                if src_stl.exists():
+                    dst_name = f"{image_id}_{cname}.stl"
+                    shutil.copy2(src_stl, self.results_dir / dst_name)
+                    mesh_stl_urls[cname] = f"/results/{dst_name}"
+        else:
+            mesh_glb_url, mesh_stl_urls = export_cbct_meshes(
+                seg_clean, spacing_xyz, self.results_dir, image_id
+            )
+
+        if findings:
+            clearance_parts = [
+                f"{f['hemimandible'].title()} lower teeth-to-mandibular canal minimum clearance: {f['min_distance_mm']:.2f} mm"
+                for f in findings
+            ]
+            summary = (
+                "CBCT 5-structure segmentation complete (Maxilla, Mandible, Upper Teeth, Lower Teeth, Mandibular Canal). "
+                + "; ".join(clearance_parts) + "."
+            )
+        else:
+            summary = "CBCT 5-structure segmentation complete. No lower tooth-to-mandibular canal proximity detected."
+
+        inference_ms = round((time.perf_counter() - t_start) * 1000.0, 1)
+        nx, ny, nz = vol_xyz.shape
+
+        return {
+            "image_id": image_id,
+            "modality": "CBCT",
+            "model": {
+                "name": "DentalSegmentator_nnUNetv2_3d_fullres",
+                "version": "v1.0.0 (Dataset112_DentalSegmentator, Dot et al. 2024)",
+                "weights_doi": "10.5281/zenodo.10829675",
+                "license": "CC BY 4.0",
+                "pretrained_as_is": True,
+            },
+            "inference_ms": inference_ms,
+            "volume_metadata": {
+                "dimensions_voxels": [int(nx), int(ny), int(nz)],
+                "spacing_mm": [float(s) for s in spacing_xyz],
+                "segmented_structures": structure_stats,
+            },
+            "findings": findings,
+            "summary": summary,
+            "original_image_url": f"/results/{orig_filename}",
+            "annotated_image_url": f"/results/{annot_filename}",
+            "mesh_glb_url": mesh_glb_url,
+            "mesh_stl_urls": mesh_stl_urls,
+            "disclaimer": DISCLAIMER_TEXT,
+        }
+
+    def _run_live_nnunet_cbct(
+        self,
+        vol_xyz: np.ndarray,
+        spacing_xyz: Tuple[float, float, float],
+        weights_dir: Path,
+    ) -> np.ndarray:
+        """Invokes nnUNetPredictor on a 3D CBCT volume when nnunetv2 and Zenodo 10829675 weights are installed."""
+        try:
+            os.environ["TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD"] = "1"
+            os.environ.setdefault("nnUNet_raw", str(weights_dir))
+            os.environ.setdefault("nnUNet_preprocessed", str(weights_dir))
+            os.environ.setdefault("nnUNet_results", str(weights_dir))
+            from nnunetv2.inference.predict_from_raw_data import nnUNetPredictor
+        except ImportError as exc:
+            raise ModelNotLoadedError(f"nnunetv2 is not installed in the current environment: {exc}") from exc
+
+        try:
+            dataset_json = next(weights_dir.rglob("dataset.json"))
+        except StopIteration as exc:
+            raise ModelNotLoadedError(f"No dataset.json found under {weights_dir}") from exc
+
+        model_folder = dataset_json.parent
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_p = Path(tmp)
+            in_file = tmp_p / "case_0000.nii.gz"
+            out_file = tmp_p / "case.nii.gz"
+            in_file.write_bytes(write_nifti_gz_bytes(vol_xyz, spacing_xyz))
+
+            predictor = nnUNetPredictor(
+                tile_step_size=0.5,
+                use_gaussian=True,
+                use_mirroring=False,
+                perform_everything_on_device=torch.cuda.is_available(),
+                device=self.device,
+                verbose=False,
+                verbose_preprocessing=False,
+                allow_tqdm=False,
+            )
+            predictor.initialize_from_trained_model_folder(
+                str(model_folder),
+                use_folds=(0,),
+                checkpoint_name="checkpoint_final.pth",
+            )
+            predictor.predict_from_files(
+                [[str(in_file)]],
+                [str(out_file)],
+                save_probabilities=False,
+                overwrite=True,
+                num_processes_preprocessing=1,
+                num_processes_segmentation_export=1,
+            )
+            vol_arr, seg_arr, _ = load_cbct_input(out_file.read_bytes(), "case.nii.gz")
+            return (seg_arr if seg_arr is not None else vol_arr).astype(np.uint8)
 
     def _draw_annotations(self, img: Image.Image, findings: List[Dict[str, Any]]) -> Image.Image:
         """Draws bounding boxes, labels, and confidence overlays on image."""

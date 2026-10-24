@@ -6,8 +6,12 @@ numpy>=1.24.0,<2.0.0
 Pillow>=10.0.0
 matplotlib>=3.7.0
 
-# Medical Imaging (DICOM)
+# Medical Imaging (DICOM & 3D NIfTI / CBCT)
 pydicom>=2.4.0
+nibabel>=5.1.0
+scipy>=1.11.0
+scikit-image>=0.21.0
+trimesh>=4.0.0
 
 # Backend & Web Service
 fastapi>=0.100.0
