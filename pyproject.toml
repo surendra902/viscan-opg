@@ -7,7 +7,7 @@ name = "viscan-opg"
 version = "1.0.0"
 description = "AI-assisted 2D dental panoramic finding detection (OPG) for dentist clinical decision support."
 authors = [{ name = "Viscan AI Engineer Candidate" }]
-license = { text = "MIT" }
+license = { text = "BSD-3-Clause" }
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
@@ -23,6 +23,7 @@ dependencies = [
 ]
 
 [tool.pytest.ini_options]
+pythonpath = ["."]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 addopts = "-v"

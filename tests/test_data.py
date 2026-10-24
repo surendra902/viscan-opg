@@ -91,6 +91,24 @@ def test_convert_annotations_to_coco_pipeline(tmp_path):
     assert len(coco["categories"]) == 4
 
 
+def test_negative_origin_bbox_clipped_not_shifted(tmp_path):
+    """Verify negative-origin bounding boxes are clipped at 0 rather than shifted right/down (D10)."""
+    import json
+    from prepare_data import convert_annotations_to_coco
+
+    raw_data = {
+        "images": [{"id": 1, "file_name": "clip.png", "width": 100, "height": 100}],
+        "annotations": [{"id": 1, "image_id": 1, "category_id_3": 0, "bbox": [-10.0, 10.0, 20.0, 20.0]}],
+    }
+    raw_json = tmp_path / "raw_clip.json"
+    raw_json.write_text(json.dumps(raw_data), encoding="utf-8")
+    out_json = tmp_path / "coco_clip.json"
+
+    convert_annotations_to_coco(raw_json, tmp_path / "images", out_json, "clip_test")
+    coco = json.loads(out_json.read_text(encoding="utf-8"))
+    assert coco["annotations"][0]["bbox"] == [0.0, 10.0, 10.0, 20.0]
+
+
 def test_download_file_local_workflow(tmp_path):
     """Verify download_file skips existing files and creates directories."""
     from prepare_data import download_file

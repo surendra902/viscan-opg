@@ -308,71 +308,88 @@ def run_evaluation(
     model = build_model_from_config(base_cfg, pretrained=False)
     load_model_weights(model, weights_path, device=device)
 
-    # Load test annotations
-    test_ann_file = Path(data_dir) / "annotations" / "instances_val.json"  # or instances_test.json
+    # Load held-out test annotations (fall back to instances_val.json only if instances_test.json is absent)
+    test_ann_file = Path(data_dir) / "annotations" / "instances_test.json"
+    images_dir = Path(data_dir) / "images" / "test"
+    if not test_ann_file.exists():
+        test_ann_file = Path(data_dir) / "annotations" / "instances_val.json"
+        images_dir = Path(data_dir) / "images" / "val"
     if not test_ann_file.exists():
         print(f"[WARN] Test annotations not found at {test_ann_file}. Ensure prepare_data.py has completed.")
         return
 
     coco_gt = COCO(str(test_ann_file))
-    images_dir = Path(data_dir) / "images" / "val"
 
-    # Run inference for all test images
-    detections = []
-    predictions_by_img = {}
+    def _collect_predictions(detector_model):
+        dets = []
+        preds_by_img = {}
+        first_tensor = None
+        from torchvision import transforms
+        for img_id in sorted(coco_gt.imgs.keys()):
+            img_info = coco_gt.loadImgs(img_id)[0]
+            img_p = images_dir / img_info["file_name"]
+            if not img_p.exists():
+                continue
 
-    from torchvision import transforms
-    for img_id in sorted(coco_gt.imgs.keys()):
-        img_info = coco_gt.loadImgs(img_id)[0]
-        img_p = images_dir / img_info["file_name"]
-        if not img_p.exists():
-            continue
+            img = Image.open(img_p).convert("RGB")
+            tensor = transforms.functional.to_tensor(img).to(device)
+            if first_tensor is None:
+                first_tensor = tensor.detach().cpu()
 
-        img = Image.open(img_p).convert("RGB")
-        tensor = transforms.functional.to_tensor(img).to(device)
+            with torch.no_grad():
+                outputs = detector_model([tensor])
+                out = outputs[0]
 
-        with torch.no_grad():
-            outputs = model([tensor])
-            out = outputs[0]
+            boxes = out["boxes"].cpu().numpy()
+            scores = out["scores"].cpu().numpy()
+            labels = out["labels"].cpu().numpy()
 
-        boxes = out["boxes"].cpu().numpy()
-        scores = out["scores"].cpu().numpy()
-        labels = out["labels"].cpu().numpy()
+            img_preds = []
+            for box, score, label in zip(boxes, scores, labels):
+                x_min, y_min, x_max, y_max = box
+                w = x_max - x_min
+                h = y_max - y_min
+                dets.append({
+                    "image_id": img_id,
+                    "category_id": int(label),
+                    "bbox": [float(x_min), float(y_min), float(w), float(h)],
+                    "score": float(score),
+                })
+                img_preds.append({
+                    "category_id": int(label),
+                    "bbox_xyxy": [float(x_min), float(y_min), float(x_max), float(y_max)],
+                    "score": float(score),
+                })
 
-        img_preds = []
-        for box, score, label in zip(boxes, scores, labels):
-            x_min, y_min, x_max, y_max = box
-            w = x_max - x_min
-            h = y_max - y_min
-            detections.append({
-                "image_id": img_id,
-                "category_id": int(label),
-                "bbox": [float(x_min), float(y_min), float(w), float(h)],
-                "score": float(score),
-            })
-            img_preds.append({
-                "category_id": int(label),
-                "bbox_xyxy": [float(x_min), float(y_min), float(x_max), float(y_max)],
-                "score": float(score),
-            })
+            preds_by_img[img_id] = img_preds
+        return dets, preds_by_img, first_tensor
 
-        predictions_by_img[img_id] = img_preds
+    # Run inference for all test images using baseline model
+    detections, predictions_by_img, sample_tensor = _collect_predictions(model)
 
-    # 1. COCO mAP metrics
-    print("\n--- 1. COCO mAP Evaluation ---")
+    # 1. COCO mAP metrics (Baseline)
+    print("\n--- 1. COCO mAP Evaluation (Baseline) ---")
     map_results = run_coco_map(coco_gt, detections)
 
     # 2. Threshold-based P/R/F1 & Confusion Matrix
     print("\n--- 2. Confidence Threshold (0.70) Precision / Recall / F1 ---")
     thresh_results = evaluate_threshold_metrics(coco_gt, predictions_by_img, conf_thresh=0.70)
 
-    # 3. CPU Latency Benchmark
-    dummy_img = torch.zeros((3, 800, 1333), dtype=torch.float32)
-    cpu_latency = benchmark_cpu_latency(model, dummy_img)
-    print(f"\n--- 3. CPU Latency Benchmark: {cpu_latency:.2f} ms per image ---")
+    # 3. Controlled Resolution Variant Evaluation (960x1600 vs 800x1333)
+    print("\n--- 3. Resolution Variant Evaluation ---")
+    var_model = build_model_from_config(var_cfg, pretrained=False)
+    load_model_weights(var_model, weights_path, device=device)
+    var_detections, _, _ = _collect_predictions(var_model)
+    variant_map_results = run_coco_map(coco_gt, var_detections)
 
-    # 4. Failure cases
-    print("\n--- 4. Extracting Failure Cases ---")
+    # 4. CPU Latency Benchmark (on real test radiograph tensor if available)
+    if sample_tensor is None:
+        sample_tensor = torch.zeros((3, 800, 1333), dtype=torch.float32)
+    cpu_latency = benchmark_cpu_latency(model, sample_tensor)
+    print(f"\n--- 4. CPU Latency Benchmark: {cpu_latency:.2f} ms per image ---")
+
+    # 5. Failure cases
+    print("\n--- 5. Extracting Failure Cases ---")
     failures = extract_failure_cases(coco_gt, images_dir, predictions_by_img, out_path / "failures", conf_thresh=0.70)
 
     # Combine into comprehensive results
@@ -380,6 +397,7 @@ def run_evaluation(
         "model": "Faster R-CNN ResNet-50 FPN V2",
         "weights": weights_path,
         "coco_map": map_results,
+        "variant_coco_map": variant_map_results,
         "threshold_metrics": thresh_results,
         "cpu_latency_ms": round(cpu_latency, 2),
         "num_failure_cases_extracted": len(failures),

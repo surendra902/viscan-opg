@@ -20,7 +20,7 @@ from fastapi.responses import JSONResponse, FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
-from service import DentalAnalysisService, DISCLAIMER_TEXT
+from service import DentalAnalysisService, DISCLAIMER_TEXT, ModelNotLoadedError
 from imaging import ImageProcessingError, InvalidImageError, UnsupportedDICOMError
 from input_gate import NonDentalInputError
 
@@ -56,9 +56,10 @@ service = DentalAnalysisService(
 @app.get("/health")
 def health_check():
     """Health status and model readiness endpoint."""
+    model_ready = service.model is not None
     return {
-        "status": "healthy",
-        "model_loaded": service.model is not None,
+        "status": "healthy" if model_ready else "degraded",
+        "model_loaded": model_ready,
         "device": str(service.device),
         "results_dir": str(RESULTS_DIR),
     }
@@ -88,6 +89,8 @@ async def analyze_opg(
 
     except HTTPException:
         raise
+    except ModelNotLoadedError as e:
+        raise HTTPException(status_code=503, detail=f"Model unavailable: {str(e)}")
     except InvalidImageError as e:
         raise HTTPException(status_code=400, detail=f"Invalid image: {str(e)}")
     except UnsupportedDICOMError as e:
@@ -388,6 +391,14 @@ def index_page():
         analyzeBtn.disabled = false;
         showStatus('', false);
 
+        // Clear any stale results from a previous analysis
+        latestResult = null;
+        annotPreview.innerHTML = '<span style="color: var(--text-muted); font-size: 13px;">Awaiting analysis</span>';
+        summaryText.textContent = 'Upload an OPG radiograph to generate findings.';
+        findingsBody.innerHTML = '';
+        findingsTable.style.display = 'none';
+        downloadBar.style.display = 'none';
+
         // Preview original if standard image
         if (!selectedFile.name.toLowerCase().endsWith('.dcm')) {
           const reader = new FileReader();
@@ -396,7 +407,7 @@ def index_page():
           };
           reader.readAsDataURL(selectedFile);
         } else {
-          origPreview.innerHTML = `<span style="color: var(--text-muted); font-size: 13px;">DICOM loaded: ${selectedFile.name}</span>`;
+          origPreview.innerHTML = `<span style="color: var(--text-muted); font-size: 13px;">DICOM loaded: ${selectedFile.name} (preview rendered upon analysis)</span>`;
         }
       }
     };
@@ -431,6 +442,9 @@ def index_page():
     };
 
     function displayResults(data) {
+      if (data.original_image_url) {
+        origPreview.innerHTML = `<img src="${data.original_image_url}" alt="Original">`;
+      }
       summaryText.textContent = data.summary;
       annotPreview.innerHTML = `<img src="${data.annotated_image_url}" alt="Annotated">`;
 

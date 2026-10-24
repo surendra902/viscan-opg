@@ -16,10 +16,11 @@ from PIL import Image
 
 try:
     import pydicom
-    from pydicom.pixel_data_handlers.util import apply_voi_lut
+    from pydicom.pixel_data_handlers.util import apply_modality_lut, apply_voi_lut
     HAS_PYDICOM = True
 except ImportError:
     pydicom = None
+    apply_modality_lut = None
     apply_voi_lut = None
     HAS_PYDICOM = False
 
@@ -140,12 +141,19 @@ def load_dicom_bytes(data: bytes) -> Tuple[Image.Image, str, Tuple[int, int]]:
     if orig_width > MAX_PIXEL_DIM or orig_height > MAX_PIXEL_DIM:
         raise InvalidImageError(f"DICOM dimensions ({orig_width}x{orig_height}) exceed safety limit.")
 
-    # Apply VOI LUT or Windowing if available
+    # Apply Modality LUT (RescaleSlope / RescaleIntercept) before VOI LUT / Windowing
     try:
+        if apply_modality_lut is not None:
+            modality_pixels = apply_modality_lut(pixel_array, ds)
+        else:
+            slope = float(getattr(ds, "RescaleSlope", 1.0))
+            intercept = float(getattr(ds, "RescaleIntercept", 0.0))
+            modality_pixels = pixel_array.astype(np.float32) * slope + intercept
+
         has_window = hasattr(ds, "WindowCenter") and hasattr(ds, "WindowWidth")
         has_voi = hasattr(ds, "VOILUTSequence")
         if apply_voi_lut is not None and (has_window or has_voi):
-            processed = apply_voi_lut(pixel_array, ds)
+            processed = apply_voi_lut(modality_pixels, ds)
         else:
             processed = _apply_window_fallback(pixel_array, ds)
     except Exception:

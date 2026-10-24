@@ -64,3 +64,43 @@ def test_monochrome1_inversion_simulation():
     inverted = 255 - norm
     assert inverted[0, 0] == 255
     assert inverted[0, 2] == 0
+
+
+def test_dicom_rescale_precedes_windowing():
+    """Verify RescaleSlope and RescaleIntercept are applied before VOI LUT windowing (D03)."""
+    pydicom = pytest.importorskip("pydicom")
+    from pydicom.dataset import FileDataset, FileMetaDataset
+    from pydicom.uid import ExplicitVRLittleEndian, SecondaryCaptureImageStorage, generate_uid
+
+    def _make_dicom(array, slope=1.0, intercept=0.0):
+        array = np.asarray(array, dtype=np.uint16)
+        fm = FileMetaDataset()
+        fm.TransferSyntaxUID = ExplicitVRLittleEndian
+        fm.MediaStorageSOPClassUID = SecondaryCaptureImageStorage
+        fm.MediaStorageSOPInstanceUID = generate_uid()
+        fm.ImplementationClassUID = generate_uid()
+        ds = FileDataset(None, {}, file_meta=fm, preamble=b"\0" * 128)
+        ds.SOPClassUID = fm.MediaStorageSOPClassUID
+        ds.SOPInstanceUID = fm.MediaStorageSOPInstanceUID
+        ds.Modality = "DX"
+        ds.Rows, ds.Columns = array.shape
+        ds.SamplesPerPixel = 1
+        ds.PhotometricInterpretation = "MONOCHROME2"
+        ds.BitsAllocated = 16
+        ds.BitsStored = 16
+        ds.HighBit = 15
+        ds.PixelRepresentation = 0
+        ds.RescaleSlope = slope
+        ds.RescaleIntercept = intercept
+        ds.WindowCenter = 450
+        ds.WindowWidth = 700
+        ds.PixelData = array.tobytes()
+        buf = io.BytesIO()
+        ds.save_as(buf, enforce_file_format=True)
+        return buf.getvalue()
+
+    raw = np.arange(8, dtype=np.uint16).reshape(2, 4) * 50
+    physical = raw * 2 + 100
+    out_rescaled = np.asarray(load_image_bytes(_make_dicom(raw, slope=2.0, intercept=100.0), "a.dcm")[0])
+    out_physical = np.asarray(load_image_bytes(_make_dicom(physical, slope=1.0, intercept=0.0), "b.dcm")[0])
+    assert np.array_equal(out_rescaled, out_physical)

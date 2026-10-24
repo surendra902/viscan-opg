@@ -2,7 +2,9 @@
 
 import pytest
 import torch
-from model import get_detector_model, NUM_CLASSES, CLASS_NAMES
+from model import get_detector_model, NUM_CLASSES, CLASS_NAMES, HAS_TORCHVISION
+
+pytestmark = pytest.mark.skipif(not HAS_TORCHVISION, reason="torchvision not installed in local test env")
 
 
 def test_model_initialization():

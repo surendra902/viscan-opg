@@ -140,8 +140,8 @@ story.append(Paragraph("Comprehensive Model Evaluation, Benchmarking & Clinical 
 # Quick Meta Card
 meta_data = [
     [
-        Paragraph("<b>Model:</b> Faster R-CNN ResNet-50 FPN V2 (43.27M params)<br/><b>Benchmark:</b> DENTEX (MICCAI 2023) — Held-Out Test Set (50 images, 182 findings)", meta_style),
-        Paragraph("<b>Operating Threshold:</b> 0.70 (Val Macro-F1 Sweep)<br/><b>Live Demo:</b> huggingface.co/spaces/surendra08/viscan-opg<br/><b>Weights SHA256:</b> e0b49b12f48fc71ec1f583db08f107650659571e7c2b9cbd454dbfed13b46a1f", meta_style),
+        Paragraph("<b>Model:</b> Faster R-CNN ResNet-50 FPN V2 (43.27M params, COCO_V1 init)<br/><b>Benchmark:</b> DENTEX (MICCAI 2023) — Held-Out Test Set (50 images, 182 findings)", meta_style),
+        Paragraph("<b>Operating Threshold:</b> 0.70 (Val Macro-F1=0.556; Test Macro-F1=0.402)<br/><b>Live Demo:</b> huggingface.co/spaces/surendra08/viscan-opg<br/><b>Weights SHA256:</b> e0b49b12f48fc71ec1f583db08f107650659571e7c2b9cbd454dbfed13b46a1f", meta_style),
     ]
 ]
 meta_table = Table(meta_data, colWidths=[3.7 * inch, 3.8 * inch])
@@ -277,19 +277,21 @@ story.append(Spacer(1, 8))
 # 4. Diagnostic Key Findings & Engineering Analysis
 story.append(Paragraph("4. Diagnostic & Error Analysis Takeaways", h1_style))
 findings_text = """
-• <b>Zero Anatomical Confusion:</b> Anatomical structures like impacted third molars are perfectly isolated from dental decay ($0$ misclassifications between teeth and lesions).<br/>
-• <b>Boundary Severity Distinction:</b> Out of 20 total misclassifications, 14 are <code>deep_caries</code> identified as <code>caries</code>. This represents a clinical grading ambiguity (enamel vs dentin penetration) rather than a missed diagnosis.<br/>
-• <b>False Alarm Screener Profile:</b> 124 of the 142 total False Positives occur on low-contrast caries proposals near interproximal contacts and existing restorations.<br/>
-• <b>Controlled Ablation Finding:</b> The higher resolution variant ($960\\times 1600$) improved strict localisation ($mAP@75 = 0.410$ vs $0.383$), but the baseline ($800\\times 1333$) achieved higher overall $mAP@50:95$ ($0.329$ vs $0.313$) and lower latency.
+• <b>Zero Anatomical Cross-Confusion:</b> Impacted teeth had 0 cross-classifications with carious or periapical lesions (35/40 TP, 5 FN).<br/>
+• <b>Boundary Severity Distinction:</b> Out of 20 total inter-class misclassifications, 14 are <code>deep_caries</code> predicted as <code>caries</code> (severity grading ambiguity near the dentin/pulp border; 6/32 TP as deep_caries, 14/32 localized as caries, 12/32 missed).<br/>
+• <b>False Alarm Screener Profile:</b> 124 of the 142 background False Positives occur on low-contrast caries proposals near interproximal contacts and existing restorations.<br/>
+• <b>5 Concrete Test Failure Cases:</b> Case 1 <code>val_4.png</code> (FP <code>impacted_tooth</code> 0.99), Case 2 <code>val_38.png</code> (FN missed <code>periapical_lesion</code>), Case 3 <code>val_3.png</code> (Misclass <code>deep_caries</code>→<code>caries</code> 0.97), Case 4 <code>val_33.png</code> (FN missed <code>caries</code>), Case 5 <code>val_13.png</code> (FP <code>impacted_tooth</code> 0.99).<br/>
+• <b>Resolution Variant Finding:</b> The 960x1600 variant (bs=1) improved strict mAP@75 (0.410 vs 0.383), while baseline (800x1333, bs=2) achieved higher primary Val mAP@50:95 (0.360 vs 0.354) and Test mAP@50:95 (0.329 vs 0.313).
 """
 story.append(Paragraph(findings_text, body_style))
 story.append(Spacer(1, 6))
 
 # 5. Visual Plots Section (Side by Side Images)
-story.append(Paragraph("5. Empirical Visualizations (Training Dynamics & Confusion Matrix)", h1_style))
+story.append(Paragraph("5. Empirical Visualizations (Training Dynamics & Dental Test Confusion Matrix)", h1_style))
 
-curve_img_path = r"C:\Users\Errachandhanam\Videos\1\Vi scan out\training_curves (2).png"
-cm_img_path = r"C:\Users\Errachandhanam\Downloads\confusion_matrix.png"
+REPO_ROOT = Path(__file__).resolve().parent
+curve_img_path = str(REPO_ROOT / "assets" / "eval" / "training_curves.png")
+cm_img_path = str(REPO_ROOT / "assets" / "eval" / "confusion_matrix.png")
 
 images_row = []
 if os.path.exists(curve_img_path) and os.path.exists(cm_img_path):
@@ -313,8 +315,8 @@ story.append(Paragraph("6. System Specifications, Latency & Regulatory Complianc
 
 spec_data = [
     [
-        Paragraph("<b>Parameter Count:</b> 43,271,528 (43.05M trainable)<br/><b>Model Architecture:</b> Faster R-CNN ResNet-50 FPN V2<br/><b>Checkpoint Size:</b> 173.5 MB (173,466,789 bytes)<br/><b>Training Epochs:</b> 12 (Best: Epoch 8, Val mAP=0.570)", body_style),
-        Paragraph("<b>CPU Inference Latency:</b> 4.6s mean, 4.9s P95 (2.0 GHz CPU)<br/><b>Memory Footprint:</b> 2.9 GB Peak RSS<br/><b>Code License:</b> BSD-3-Clause (Torchvision / Commercial Permissive)<br/><b>Weights License:</b> CC BY-NC-SA 4.0 (DENTEX Benchmark)", body_style),
+        Paragraph("<b>Parameter Count:</b> 43,271,528 (43.05M trainable)<br/><b>Model Architecture:</b> Faster R-CNN ResNet-50 FPN V2 (COCO_V1)<br/><b>Checkpoint Size:</b> 173.5 MB (173,466,789 bytes)<br/><b>Training Epochs:</b> 12 (Best: Epoch 8, Val mAP@50=0.570, Val mAP@50:95=0.360)", body_style),
+        Paragraph("<b>CPU Inference Latency:</b> 4,618.0 ms mean, 4,915.7 ms P95 (2-vCPU Xeon @ 2.00GHz)<br/><b>Memory Footprint:</b> 2,926 MB Peak RSS (on 2892x1316 OPG)<br/><b>Code License:</b> BSD-3-Clause (Torchvision / Commercial Permissive)<br/><b>Weights License:</b> CC BY-NC-SA 4.0 (DENTEX Non-Commercial Research)", body_style),
     ]
 ]
 spec_table = Table(spec_data, colWidths=[3.75 * inch, 3.75 * inch])

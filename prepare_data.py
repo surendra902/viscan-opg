@@ -20,9 +20,11 @@ Never infer filename from image ID.
 import os
 import sys
 import json
+import random
+import shutil
 import zipfile
 import urllib.request
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, List, Tuple, Optional, Set
 from pathlib import Path
 
 CATEGORY_MAPPING = {
@@ -82,27 +84,44 @@ def convert_annotations_to_coco(
     images_dir: Path,
     out_json_path: Path,
     split_name: str,
+    allowed_image_ids: Optional[Set[int]] = None,
+    source_images_root: Optional[Path] = None,
 ) -> Dict[str, Any]:
     """
     Parses DENTEX raw JSON, validates categories and bounding boxes,
-    matches image_id to images[].file_name, and exports standard COCO json.
+    matches image_id to images[].file_name, optionally copies split images into
+    images_dir, and exports standard COCO json.
     """
     print(f"[CONVERT] Converting {split_name} annotations from {raw_json_path}...")
     with open(raw_json_path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
+    # Index available source image files by basename if source_images_root is provided
+    source_file_index: Dict[str, Path] = {}
+    if source_images_root is not None and source_images_root.exists():
+        for p in source_images_root.rglob("*"):
+            if p.is_file() and p.suffix.lower() in (".png", ".jpg", ".jpeg"):
+                source_file_index[p.name] = p
+
+    images_dir.mkdir(parents=True, exist_ok=True)
+
     # Build image map: id -> image_dict
     image_map = {}
     for img in data.get("images", []):
         img_id = img["id"]
+        if allowed_image_ids is not None and img_id not in allowed_image_ids:
+            continue
         fname = os.path.basename(img["file_name"])
-        # Check if file exists in images_dir
         image_map[img_id] = {
             "id": img_id,
             "file_name": fname,
             "width": img.get("width", 0),
             "height": img.get("height", 0),
         }
+        if fname in source_file_index:
+            dst_img = images_dir / fname
+            if not dst_img.exists():
+                shutil.copy2(source_file_index[fname], dst_img)
 
     coco_images = []
     coco_annotations = []
@@ -132,21 +151,24 @@ def convert_annotations_to_coco(
         if w <= 0 or h <= 0:
             continue
 
-        # Convert to xyxy for bounds verification
-        x_min = max(0.0, x)
-        y_min = max(0.0, y)
+        # Convert to xyxy for proper raster intersection clipping (clip right/bottom from original x+w, y+h)
         img_w = image_map[img_id]["width"]
         img_h = image_map[img_id]["height"]
+        raw_x_max = x + w
+        raw_y_max = y + h
+
+        x_min = max(0.0, x)
+        y_min = max(0.0, y)
 
         if img_w > 0:
-            x_max = min(float(img_w), x_min + w)
+            x_max = min(float(img_w), raw_x_max)
         else:
-            x_max = x_min + w
+            x_max = raw_x_max
 
         if img_h > 0:
-            y_max = min(float(img_h), y_min + h)
+            y_max = min(float(img_h), raw_y_max)
         else:
-            y_max = y_min + h
+            y_max = raw_y_max
 
         final_w = x_max - x_min
         final_h = y_max - y_min
@@ -222,18 +244,39 @@ def prepare_dataset(dest_root: str = "data/dentex"):
 
     train_raw_json = root / "extracted_train" / "training_data" / "quadrant-enumeration-disease" / "train_quadrant_enumeration_disease.json"
 
-    # 4. Convert and reconcile COCO format
+    # 4. Deterministic 3-Way Split (seed=42): 635 train / 70 val from 705 pool, and 50 held-out test
+    with open(train_raw_json, "r", encoding="utf-8") as f:
+        raw_train_data = json.load(f)
+    all_img_ids = sorted([img["id"] for img in raw_train_data.get("images", [])])
+    rng = random.Random(42)
+    rng.shuffle(all_img_ids)
+    val_ids_set = set(all_img_ids[:70])
+    train_ids_set = set(all_img_ids[70:])
+
+    # 5. Convert annotations to COCO format and populate images/{train,val,test}
     convert_annotations_to_coco(
         train_raw_json,
         images_dir / "train",
         ann_dir / "instances_train.json",
         "train",
+        allowed_image_ids=train_ids_set,
+        source_images_root=root / "extracted_train",
     )
     convert_annotations_to_coco(
-        val_raw_json,
+        train_raw_json,
         images_dir / "val",
         ann_dir / "instances_val.json",
         "val",
+        allowed_image_ids=val_ids_set,
+        source_images_root=root / "extracted_train",
+    )
+    convert_annotations_to_coco(
+        val_raw_json,
+        images_dir / "test",
+        ann_dir / "instances_test.json",
+        "test",
+        allowed_image_ids=None,
+        source_images_root=root / "extracted_val",
     )
 
     print("\n[COMPLETE] DENTEX dataset preparation completed successfully.")

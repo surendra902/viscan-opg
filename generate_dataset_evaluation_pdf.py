@@ -25,8 +25,10 @@ from reportlab.platypus import (
 )
 from reportlab.pdfgen import canvas
 
-PDF_OUTPUT_1 = Path(r"c:\Users\Errachandhanam\Videos\1\viscan-opg\Viscan_Dataset_Usage_and_Evaluation_Report.pdf")
+REPO_ROOT = Path(__file__).resolve().parent
+PDF_OUTPUT_1 = REPO_ROOT / "Viscan_Dataset_Usage_and_Evaluation_Report.pdf"
 PDF_OUTPUT_2 = Path(r"C:\Users\Errachandhanam\Downloads\Viscan_Dataset_Usage_and_Evaluation_Report.pdf")
+
 
 class NumberedCanvas(canvas.Canvas):
     def __init__(self, *args, **kwargs):
@@ -49,14 +51,14 @@ class NumberedCanvas(canvas.Canvas):
         self.saveState()
         self.setFont("Helvetica", 7.5)
         self.setFillColor(colors.HexColor("#64748B"))
-        
+
         # Header (pages > 1)
         if self._pageNumber > 1:
             self.drawString(32, 762, "Viscan Dental OPG AI — Dataset Usage, Partitioning & Quantitative Evaluation Report")
             self.setStrokeColor(colors.HexColor("#CBD5E1"))
             self.setLineWidth(0.5)
             self.line(32, 756, 580, 756)
-            
+
         # Footer (all pages)
         self.setStrokeColor(colors.HexColor("#CBD5E1"))
         self.setLineWidth(0.5)
@@ -86,7 +88,7 @@ DARK_TEXT = colors.HexColor("#0F172A")   # Slate 900
 MUTED_TEXT = colors.HexColor("#475569")  # Slate 600
 BG_LIGHT = colors.HexColor("#F8FAFC")    # Slate 50
 BG_ALT = colors.HexColor("#F1F5F9")      # Slate 100
-BORDER_COLOR = colors.HexColor("#CBD5E1") # Slate 300
+BORDER_COLOR = colors.HexColor("#CBD5E1")  # Slate 300
 HIGHLIGHT_GREEN = colors.HexColor("#ECFDF5")
 HIGHLIGHT_RED = colors.HexColor("#FEF2F2")
 
@@ -224,8 +226,8 @@ summary_box_data = [
         Paragraph(
             "<b>EXECUTIVE AUDIT SUMMARY:</b><br/>"
             "• <b>Did we use all datasets mentioned in the assessment?</b> <b>NO.</b> Out of three candidate public datasets reviewed (DENTEX, Zhou et al., Tufts), only <b>DENTEX (MICCAI 2023)</b> was selected. Zhou et al. and Tufts were systematically excluded because their annotations lack clinical separation of the 4 required disease classes.<br/>"
-            "• <b>Exact Dataset Split Percentages:</b> From the 755-image labeled cohort, <b>84.11% (635 images)</b> was used for Training, <b>9.27% (70 images)</b> was carved out for Validation (checkpoint selection & threshold tuning), and <b>6.62% (50 images)</b> was strictly held out as the Test Set (evaluated only once). Zero data leakage confirmed (0 overlapping files).<br/>"
-            "• <b>Evaluation Results:</b> The Faster R-CNN ResNet-50 FPN V2 achieved <b>mAP@50 = 49.6%</b>, <b>mAP@50:95 = 32.9%</b>, and <b>mAP@75 = 38.3%</b> on held-out test data. Operating at optimal threshold <b>0.70</b>, <code>impacted_tooth</code> achieved <b>76.1% precision / 87.5% recall (F1=0.814)</b>, while <code>caries</code> acts as a high-sensitivity screener (capturing 67.0% of decay).",
+            "• <b>Exact Dataset Split Percentages:</b> From the 755-image labeled cohort, <b>84.11% (635 images, 3,190 boxes)</b> was used for Training, <b>9.27% (70 images, 339 boxes)</b> was carved out for Validation (checkpoint selection & threshold tuning), and <b>6.62% (50 images, 182 boxes)</b> was strictly held out as the Test Set (evaluated only once). Zero filename overlap confirmed across splits.<br/>"
+            "• <b>Evaluation Results:</b> The Faster R-CNN ResNet-50 FPN V2 achieved <b>mAP@50 = 49.6%</b>, <b>mAP@50:95 = 32.9%</b>, and <b>mAP@75 = 38.3%</b> on held-out test data. Operating at validation-tuned threshold <b>0.70</b> (Val Macro-F1 = 0.556, Test Macro-F1 = 0.402), <code>impacted_tooth</code> achieved <b>76.1% precision / 87.5% recall (F1=0.814)</b>, while <code>caries</code> captured <b>53.5% (54/101) of test decay lesions</b>.",
             callout_style,
         )
     ]
@@ -267,18 +269,18 @@ dataset_review_data = [
     [
         Paragraph("<b>Zhou et al.<br/>(2024)</b>", table_cell_bold),
         Paragraph("Panoramic OPG<br/>2,066 images", table_cell_style),
-        Paragraph("Tooth segmentation polygons with 7 tooth-state classifications (normal, treated, missing, crown, bridge, implant, residual root).", table_cell_style),
+        Paragraph("Instance segmentation polygons with 7 tooth-state classes (tooth without anomalies, fillings, root canal treatment (RCT), crown, caries, residual root, RCT + crown).", table_cell_style),
         Paragraph("CC BY 4.0", table_cell_center),
         Paragraph("<b>EXCLUDED</b>", badge_excluded),
-        Paragraph("<b>Incompatible taxonomy.</b> Labels focus on general restorative presence and missing tooth morphology rather than active disease. Completely lacks differential staging between superficial caries, deep caries, and periapical pathology.", table_cell_style),
+        Paragraph("<b>Incompatible taxonomy.</b> Labels focus on restorative status and general tooth state. Does not distinguish superficial caries from deep caries and lacks impacted tooth and periapical lesion classes.", table_cell_style),
     ],
     [
         Paragraph("<b>Tufts Dental<br/>Database</b>", table_cell_bold),
         Paragraph("Panoramic OPG<br/>1,000 images", table_cell_style),
-        Paragraph("Tooth masks and broad abnormality bounding boxes (radiolucency, radiopacity, foreign body).", table_cell_style),
+        Paragraph("Tooth masks and broad abnormality regions (radiolucency, radiopacity, eye-tracking maps).", table_cell_style),
         Paragraph("Restricted Institutional", table_cell_center),
         Paragraph("<b>EXCLUDED</b>", badge_excluded),
-        Paragraph("<b>Restricted access & unaligned taxonomy.</b> Access requires institutional authorization. Abnormality categories are overly generic radiographic descriptors that cannot be deterministically mapped to the four required clinical entities.", table_cell_style),
+        Paragraph("<b>Restricted access & unaligned taxonomy.</b> Access requires institutional agreement. Abnormality categories are generic radiographic descriptors that cannot be deterministically mapped to the four required clinical entities.", table_cell_style),
     ],
 ]
 
@@ -298,8 +300,8 @@ story.append(Spacer(1, 4))
 # SECTION 2
 story.append(Paragraph("2. Dataset Partitioning, Usage Percentages & Leakage Prevention", h1_style))
 story.append(Paragraph(
-    "To guarantee strict methodological integrity (R07, R11), the labeled DENTEX corpus was partitioned into a 3-way split using fixed random seed 42. "
-    "The official 50-image validation set was designated as the <b>untouched held-out test set</b> and evaluated exactly once. "
+    "To guarantee methodological integrity (R07, R11), the labeled DENTEX corpus was partitioned into a 3-way split using fixed random seed 42. "
+    "The official 50-image validation archive was designated as the <b>untouched held-out test set</b> and evaluated once. "
     "The 705-image training archive was split into 635 training images and 70 validation images for epoch checkpoint selection.",
     body_style
 ))
@@ -318,16 +320,16 @@ split_data = [
         Paragraph("635", table_cell_bold_center),
         Paragraph("<b>84.11%</b>", table_cell_bold_center),
         Paragraph("<b>90.07%</b>", table_cell_center),
-        Paragraph("3,178", table_cell_center),
-        Paragraph("Model parameter updates, loss backpropagation, and multi-scale data augmentation (flips, jitter, scales).", table_cell_style),
+        Paragraph("3,190", table_cell_center),
+        Paragraph("Model parameter updates, loss backpropagation, and multi-scale data augmentation (horizontal flip, scale jitter).", table_cell_style),
     ],
     [
         Paragraph("<b>Validation Set</b>", table_cell_bold),
         Paragraph("70", table_cell_bold_center),
         Paragraph("<b>9.27%</b>", table_cell_bold_center),
         Paragraph("<b>9.93%</b>", table_cell_center),
-        Paragraph("351", table_cell_center),
-        Paragraph("Checkpoint selection (Epoch 8 best mAP=0.570) and confidence threshold sweep optimization ([0.10, 0.90]).", table_cell_style),
+        Paragraph("339", table_cell_center),
+        Paragraph("Checkpoint selection (Epoch 8 best Val mAP@50=0.570, mAP@50:95=0.360) and threshold sweep ([0.10, 0.90]).", table_cell_style),
     ],
     [
         Paragraph("<b>Held-Out Test Set</b>", table_cell_bold),
@@ -335,7 +337,7 @@ split_data = [
         Paragraph("<b>6.62%</b>", table_cell_bold_center),
         Paragraph("— (Official Val)", table_cell_center),
         Paragraph("182", table_cell_center),
-        Paragraph("<b>Strictly held-out.</b> Evaluated exactly once after freezing model weights and operating threshold. Zero tuning leakage.", table_cell_style),
+        Paragraph("<b>Strictly held-out.</b> Evaluated once after freezing model weights and operating threshold. Zero tuning leakage.", table_cell_style),
     ],
     [
         Paragraph("<b>Total Active Cohort</b>", table_cell_bold),
@@ -362,8 +364,8 @@ story.append(split_table)
 story.append(Spacer(1, 3))
 
 leakage_text = """
-<b>Data Leakage Verification:</b> Zero filename intersection was programmatically asserted across all three splits (<code>len(train_files intersect val_files) == 0</code>, <code>len(train_files intersect test_files) == 0</code>, <code>len(val_files intersect test_files) == 0</code>). 
-Ground truth labels were joined strictly on image filename rather than sequential integer IDs to eliminate index corruption bugs.
+<b>Split Disjointness Verification:</b> Zero filename intersection was programmatically asserted across all three splits (<code>len(train_files intersect val_files) == 0</code>, <code>len(train_files intersect test_files) == 0</code>, <code>len(val_files intersect test_files) == 0</code>). 
+Note: Public DENTEX releases strip DICOM patient headers prior to publication (`train_0.png`..`train_704.png`, `val_0.png`..`val_49.png`), so patient-level deduplication cannot be verified beyond image-level disjointness.
 """
 story.append(Paragraph(leakage_text, body_style))
 
@@ -377,7 +379,7 @@ story.append(PageBreak())
 story.append(Paragraph("3. Quantitative Output Evaluation Methodology & Primary Metrics", h1_style))
 story.append(Paragraph(
     "Model performance was evaluated on the held-out 50-image test set (182 true findings) using official COCO evaluation standards "
-    "(IoU threshold range 0.50 to 0.95 with step 0.05). Below are the precise measured metrics:",
+    "(IoU threshold range 0.50 to 0.95 with step 0.05). Below are the measured metrics:",
     body_style
 ))
 
@@ -393,25 +395,25 @@ coco_kpi_data = [
         Paragraph("<b>mAP @ IoU=0.50</b>", table_cell_bold),
         Paragraph("<b>49.6% (0.496)</b>", table_cell_bold_center),
         Paragraph("Diagnostic Screening Standard", table_cell_center),
-        Paragraph("Measures detection accuracy with 50% spatial overlap against clinical expert bounding boxes. Baseline detector successfully captures half of all disease findings.", table_cell_style),
+        Paragraph("Area under the precision-recall curve averaged across all 4 classes at 50% spatial overlap (IoU >= 0.50) against expert bounding boxes.", table_cell_style),
     ],
     [
         Paragraph("<b>mAP @ IoU=0.50:0.95</b> (Primary)", table_cell_bold),
         Paragraph("<b>32.9% (0.329)</b>", table_cell_bold_center),
         Paragraph("Official COCO Primary Metric", table_cell_center),
-        Paragraph("Average precision integrated across 10 IoU thresholds (0.50 to 0.95). Stringent measure penalizing loose boundaries; highly competitive for small dental pathologies.", table_cell_style),
+        Paragraph("Average precision integrated across 10 IoU thresholds (0.50 to 0.95). Stringent measure penalizing loose boundaries on small dental findings.", table_cell_style),
     ],
     [
         Paragraph("<b>mAP @ IoU=0.75</b> (Strict)", table_cell_bold),
         Paragraph("<b>38.3% (0.383)</b>", table_cell_bold_center),
         Paragraph("High-Precision Boundary Metric", table_cell_center),
-        Paragraph("Evaluates localization tightness under high IoU requirements. Proves that bounding boxes tightly hug true carious lesions and impacted teeth contours.", table_cell_style),
+        Paragraph("Evaluates localization tightness under strict 75% IoU overlap requirements.", table_cell_style),
     ],
     [
         Paragraph("<b>Average Recall (AR @ 100)</b>", table_cell_bold),
         Paragraph("<b>68.3% (0.683)</b>", table_cell_bold_center),
-        Paragraph("Maximum Clinical Sensitivity", table_cell_center),
-        Paragraph("Across top-100 detections per OPG, the model captures nearly 70% of all present pathologies, ensuring minimal missed diagnoses in paired clinical review.", table_cell_style),
+        Paragraph("Top-100 Proposal Sensitivity", table_cell_center),
+        Paragraph("Upper-bound recall across up to 100 candidate detections per OPG (before confidence thresholding). At operating threshold 0.70, 96/182 (52.7%) of GT boxes are matched.", table_cell_style),
     ],
 ]
 
@@ -428,9 +430,8 @@ story.append(Spacer(1, 5))
 
 story.append(Paragraph("4. Per-Class Benchmark Performance & Operating Metrics (@ Threshold = 0.70)", h1_style))
 story.append(Paragraph(
-    "To translate raw detector outputs into a clinical decision-support tool, an empirical threshold sweep was performed on validation data. "
-    "A confidence threshold of <b>0.70</b> was selected to optimize Macro-F1 (0.444). "
-    "Below are the per-class metrics evaluated at this operating point on the held-out test set:",
+    "To select a deployment threshold without test leakage, a threshold sweep (0.10 to 0.90) was performed on the 70-image validation set. "
+    "A confidence threshold of <b>0.70</b> was selected to maximize Validation Macro-F1 (<b>0.556</b>), achieving <b>0.402</b> Macro-F1 on the held-out test set:",
     body_style
 ))
 
@@ -443,7 +444,7 @@ per_class_data = [
         Paragraph("Recall", table_header_style),
         Paragraph("F1-Score", table_header_style),
         Paragraph("Test Support (n)", table_header_style),
-        Paragraph("Observed Clinical Behavior & Reliability", table_header_style),
+        Paragraph("Observed Clinical Behavior & Error Profile", table_header_style),
     ],
     [
         Paragraph("<b>Impacted Tooth</b>", table_cell_bold),
@@ -453,7 +454,7 @@ per_class_data = [
         Paragraph("<b>87.5%</b>", table_cell_bold_center),
         Paragraph("<b>0.814</b>", table_cell_bold_center),
         Paragraph("40", table_cell_center),
-        Paragraph("<b>Exceptional Reliability:</b> Distinct radiopaque morphology of impacted molars yields zero cross-confusion with decay. High clinical trust.", table_cell_style),
+        Paragraph("<b>Strongest Class:</b> Distinct morphology of impacted third molars yields zero cross-confusion with decay (35/40 recalled, 10 background FPs).", table_cell_style),
     ],
     [
         Paragraph("<b>Caries</b> (Superficial)", table_cell_bold),
@@ -463,7 +464,7 @@ per_class_data = [
         Paragraph("<b>53.5%</b>", table_cell_bold_center),
         Paragraph("<b>0.365</b>", table_cell_bold_center),
         Paragraph("101", table_cell_center),
-        Paragraph("<b>Sensitive Screener:</b> Captures >50% of decay lesions; produces false alarms on restoration margins, serving as prompts for dentist review.", table_cell_style),
+        Paragraph("<b>High False-Alarm Rate:</b> Recalls 54/101 lesions (45 missed, 2 misclassified), with 124 background false positives on interproximal shading and restorations.", table_cell_style),
     ],
     [
         Paragraph("<b>Deep Caries</b>", table_cell_bold),
@@ -473,7 +474,7 @@ per_class_data = [
         Paragraph("<b>18.8%</b>", table_cell_bold_center),
         Paragraph("<b>0.261</b>", table_cell_bold_center),
         Paragraph("32", table_cell_center),
-        Paragraph("<b>Conservative Boundary:</b> 70% of classification errors were labeled as superficial caries due to subtle dentin penetration borders.", table_cell_style),
+        Paragraph("<b>Adjacent Severity Confusion:</b> 6/32 recalled as deep caries, while 14/32 (43.8%) are detected at IoU>=0.50 but labeled as superficial <code>caries</code>.", table_cell_style),
     ],
     [
         Paragraph("<b>Periapical Lesion</b>", table_cell_bold),
@@ -483,7 +484,7 @@ per_class_data = [
         Paragraph("<b>11.1%</b>", table_cell_bold_center),
         Paragraph("<b>0.167</b>", table_cell_bold_center),
         Paragraph("9", table_cell_center),
-        Paragraph("<b>Small Sample Constraint:</b> Only 9 true lesions in test set (158 in train). Requires focal loss or targeted class re-sampling in Phase 2.", table_cell_style),
+        Paragraph("<b>Severe Minority Class:</b> Only 9 true lesions in test set (144 in train; 14 in val). 1 recalled, 4 missed, 4 misclassified as caries/deep caries.", table_cell_style),
     ],
 ]
 
@@ -503,7 +504,7 @@ story.append(Spacer(1, 5))
 
 story.append(Paragraph("5. Confusion Matrix & Clinical Failure Mode Analysis", h1_style))
 story.append(Paragraph(
-    "A full multiclass confusion matrix was computed at threshold 0.70 to diagnose inter-class leakage and false alarm patterns:",
+    "A 5x5 detection confusion matrix was computed on the 50-image test set at threshold 0.70 and IoU >= 0.50:",
     body_style
 ))
 
@@ -536,9 +537,9 @@ story.append(Spacer(1, 3))
 
 cm_takeaways = """
 <b>Key Error Findings:</b><br/>
-1. <b>Zero Cross-Condition Confusion:</b> 0 impacted teeth were misclassified as decay or lesions, confirming robust architectural separation of bony anatomy.<br/>
-2. <b>Severity Grading Ambiguity:</b> 14 out of 20 total inter-class misclassifications occurred when <code>deep_caries</code> was predicted as <code>caries</code>. In a clinical workflow, this is a minor severity discrepancy rather than a missed pathological site.<br/>
-3. <b>False Positive Concentration:</b> 124 of 142 false alarms belong to <code>caries</code> on low-contrast interproximal enamel surfaces.
+1. <b>Zero Impacted-to-Decay Confusion:</b> 0 ground-truth impacted teeth were misclassified as decay or periapical lesions (35 TP, 5 FN).<br/>
+2. <b>Severity Grading Ambiguity:</b> 14 out of 20 inter-class misclassifications occurred when <code>deep_caries</code> was predicted as <code>caries</code>.<br/>
+3. <b>False Positive Concentration:</b> 124 of 142 false positives belong to <code>caries</code> on low-contrast interproximal enamel and cervical burnout regions.
 """
 story.append(Paragraph(cm_takeaways, body_style))
 
@@ -549,17 +550,17 @@ story.append(PageBreak())
 # PAGE 3: CONTROLLED EXPERIMENTATION, BENCHMARKS & VERIFIED DELIVERABLES
 # =========================================================================
 
-story.append(Paragraph("6. Controlled Architecture Ablation & Engineering Trade-Offs", h1_style))
+story.append(Paragraph("6. Architecture Resolution Experiment & Engineering Trade-Offs", h1_style))
 story.append(Paragraph(
-    "Per Requirement R14, a controlled model improvement experiment was conducted, evaluating a high-resolution feature pyramid variant "
-    "(min_size=960, max_size=1600) against the baseline architecture (min_size=800, max_size=1333):",
+    "Per Requirement R14, a trained model comparison experiment evaluated a higher-resolution feature pyramid variant "
+    "(min_size=960, max_size=1600, batch_size=1) against the baseline architecture (min_size=800, max_size=1333, batch_size=2):",
     body_style
 ))
 
 ablation_data = [
     [
         Paragraph("Model Configuration", table_header_style),
-        Paragraph("Input Scale (Min × Max)", table_header_style),
+        Paragraph("Input Scale / Batch", table_header_style),
         Paragraph("Effective Scale on OPG", table_header_style),
         Paragraph("mAP@50", table_header_style),
         Paragraph("mAP@50:95", table_header_style),
@@ -568,21 +569,21 @@ ablation_data = [
     ],
     [
         Paragraph("<b>Baseline Architecture</b><br/>(ResNet-50 FPN V2)", table_cell_bold),
-        Paragraph("800 × 1333", table_cell_center),
+        Paragraph("800 × 1333<br/>(batch_size=2)", table_cell_center),
         Paragraph("1333 × 607<br/>(Long-side cap binds)", table_cell_center),
         Paragraph("<b>49.6%</b>", table_cell_bold_center),
         Paragraph("<b>32.9%</b>", table_cell_bold_center),
         Paragraph("38.3%", table_cell_center),
-        Paragraph("<b>Selected as Final Production Model.</b> Higher overall mAP@50:95 (+1.6%), faster CPU inference, and half the memory footprint.", table_cell_style),
+        Paragraph("<b>Selected as Final Model</b> via primary Val mAP@50:95 (0.360 vs 0.354). Higher test mAP@50 (+0.3%) and mAP@50:95 (+1.6%), with 45.7% Deep Caries AP50.", table_cell_style),
     ],
     [
         Paragraph("<b>High-Resolution Variant</b><br/>(ResNet-50 FPN V2)", table_cell_bold),
-        Paragraph("960 × 1600", table_cell_center),
+        Paragraph("960 × 1600<br/>(batch_size=1)", table_cell_center),
         Paragraph("1600 × 728<br/>(1.2× resolution)", table_cell_center),
-        Paragraph("46.2%", table_cell_center),
-        Paragraph("31.3%", table_cell_center),
+        Paragraph("49.3% (-0.3%)", table_cell_center),
+        Paragraph("31.3% (-1.6%)", table_cell_center),
         Paragraph("<b>41.0% (+2.7%)</b>", table_cell_bold_center),
-        Paragraph("Improved strict boundary localization at IoU=0.75, but required reducing batch size to 1 on GPU T4, introducing gradient variance that reduced overall mAP.", table_cell_style),
+        Paragraph("Improved strict mAP@75 (+2.7%) and Impacted Tooth AP50 (91.5%), but batch_size=1 without LR rescaling degraded Deep Caries AP50 (36.5%, -9.2%). Two-variable confound noted.", table_cell_style),
     ],
 ]
 
@@ -599,10 +600,10 @@ story.append(ablation_table)
 story.append(Spacer(1, 5))
 
 # SECTION 7: PLOTS
-story.append(Paragraph("7. Empirical Evidence Visualizations (Training Curves & Confusion Matrix)", h1_style))
+story.append(Paragraph("7. Empirical Evidence Visualizations (Training Curves & Dental Confusion Matrix)", h1_style))
 
-curve_img_path = r"C:\Users\Errachandhanam\Videos\1\Vi scan out\training_curves (2).png"
-cm_img_path = r"C:\Users\Errachandhanam\Downloads\confusion_matrix.png"
+curve_img_path = str(REPO_ROOT / "assets" / "eval" / "training_curves.png")
+cm_img_path = str(REPO_ROOT / "assets" / "eval" / "confusion_matrix.png")
 
 if os.path.exists(curve_img_path) and os.path.exists(cm_img_path):
     images_row = [
@@ -625,18 +626,18 @@ story.append(Paragraph("8. Hardware Benchmarks, Licensing & Live Deliverables", 
 
 spec_data = [
     [
-        Paragraph("<b>Hardware & Latency Benchmark</b><br/>"
-                  "• <b>Platform:</b> Intel Xeon @ 2.00GHz (2 vCPUs)<br/>"
-                  "• <b>Test Image:</b> Real OPG (2892 × 1316 resolution)<br/>"
-                  "• <b>Mean Latency:</b> 937.5 ms (Throughput: 1.07 img/sec)<br/>"
-                  "• <b>P95 Latency:</b> 978.7 ms (Max: 1124.3 ms)<br/>"
-                  "• <b>Memory Footprint:</b> 2,279 MB Peak RSS", body_style),
+        Paragraph("<b>Hardware & CPU Latency Benchmark</b><br/>"
+                  "• <b>Platform:</b> Intel Xeon @ 2.00GHz (2 vCPUs, 2 threads)<br/>"
+                  "• <b>Test Image:</b> Real OPG <code>val_15.png</code> (2892 × 1316)<br/>"
+                  "• <b>Mean Latency:</b> 4,618.0 ms (Throughput: 0.22 img/sec)<br/>"
+                  "• <b>P95 Latency:</b> 4,915.7 ms (Max: 5,037.2 ms)<br/>"
+                  "• <b>Memory Footprint:</b> 2,926 MB Peak RSS", body_style),
         Paragraph("<b>Licensing & Open Source Governance</b><br/>"
                   "• <b>Architecture:</b> Faster R-CNN ResNet-50 FPN V2<br/>"
                   "• <b>Code License:</b> <b>BSD-3-Clause</b> (Permissive, commercial ready)<br/>"
-                  "• <b>Pretrained Source:</b> PyTorch Torchvision COCO_V2<br/>"
+                  "• <b>Pretrained Source:</b> PyTorch Torchvision COCO_V1<br/>"
                   "• <b>Weights License:</b> CC BY-NC-SA 4.0 (DENTEX)<br/>"
-                  "• <b>Production Note:</b> Requires commercial data for clinical SaMD", body_style),
+                  "• <b>Production Note:</b> Commercial deployment requires retraining on commercial data", body_style),
     ]
 ]
 spec_table = Table(spec_data, colWidths=[3.8 * inch, 3.8 * inch])
@@ -661,7 +662,7 @@ urls_data = [
     ],
     [
         Paragraph("<b>Local Standalone Service:</b>", table_cell_bold),
-        Paragraph("FastAPI backend (<code>POST /analyze</code>) with Gradio UI & Docker Compose (port 8000)", table_cell_style),
+        Paragraph("FastAPI backend (<code>POST /analyze</code>) with side-by-side web UI & Docker support (port 8000)", table_cell_style),
     ],
 ]
 urls_table = Table(urls_data, colWidths=[2.2 * inch, 5.4 * inch])
@@ -678,7 +679,7 @@ story.append(Spacer(1, 5))
 disclaimer_data = [
     [
         Paragraph(
-            "<b>REGULATORY CLINICAL NOTICE:</b> This software is a clinical decision-support research demonstration developed for "
+            "<b>REGULATORY CLINICAL NOTICE:</b> This software is a clinical decision-support research prototype developed for "
             "paired evaluation alongside licensed dental practitioners. It is not an FDA-cleared or CE-marked medical device. "
             "All visual annotations, bounding boxes, and clinical summaries must be verified by a qualified dentist.",
             ParagraphStyle("DisclStyle", parent=styles["Normal"], fontName="Helvetica-Oblique", fontSize=7.2, leading=10, textColor=colors.HexColor("#991B1B")),
@@ -697,6 +698,9 @@ story.append(disclaimer_table)
 doc.build(story, canvasmaker=NumberedCanvas)
 print(f"Generated PDF successfully at: {PDF_OUTPUT_1}")
 
-# Copy to Downloads
-shutil.copy(str(PDF_OUTPUT_1), str(PDF_OUTPUT_2))
-print(f"Copied to Downloads at: {PDF_OUTPUT_2}")
+# Copy to Downloads if accessible
+try:
+    shutil.copy(str(PDF_OUTPUT_1), str(PDF_OUTPUT_2))
+    print(f"Copied to Downloads at: {PDF_OUTPUT_2}")
+except Exception as exc:
+    print(f"Note: Could not copy to Downloads: {exc}")

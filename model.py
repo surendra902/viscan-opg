@@ -15,11 +15,19 @@ License:
 from typing import Dict, Any, Optional
 import torch
 import torch.nn as nn
-from torchvision.models.detection import (
-    fasterrcnn_resnet50_fpn_v2,
-    FasterRCNN_ResNet50_FPN_V2_Weights,
-)
-from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
+
+try:
+    from torchvision.models.detection import (
+        fasterrcnn_resnet50_fpn_v2,
+        FasterRCNN_ResNet50_FPN_V2_Weights,
+    )
+    from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
+    HAS_TORCHVISION = True
+except ImportError:
+    fasterrcnn_resnet50_fpn_v2 = None
+    FasterRCNN_ResNet50_FPN_V2_Weights = None
+    FastRCNNPredictor = None
+    HAS_TORCHVISION = False
 
 CLASS_NAMES = {
     0: "background",

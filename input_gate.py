@@ -75,7 +75,37 @@ class DentalInputGate:
         if std_dev < 8.0:
             return False, 0.01, f"Image lacks sufficient dynamic range (std={std_dev:.1f}). The file appears blank, corrupt, or unexposed."
 
-        # 4. Neural Classifier check (if model loaded)
+        # 4. Radiographic Continuous-Tone & Histogram Modality Check
+        # Scanned text documents, screenshots, and binary graphics have bimodal or sparse histograms
+        # dominated by near-white backgrounds or two discrete tones, whereas dental OPGs exhibit
+        # continuous grayscale attenuation across soft tissue, bone, dentin, and enamel.
+        near_white_frac = float(np.mean(gray >= 240.0))
+        if near_white_frac > 0.35:
+            return (
+                False,
+                0.03,
+                f"Image is dominated by a bright/white background ({near_white_frac * 100:.1f}% near-white pixels), typical of a document or screenshot rather than a dental radiograph.",
+            )
+
+        midtone_frac = float(np.mean((gray > 15.0) & (gray < 235.0)))
+        if midtone_frac < 0.25:
+            return (
+                False,
+                0.04,
+                f"Image lacks continuous radiographic mid-tone tissue attenuation (mid-tone fraction={midtone_frac:.2f}). Likely a binary text document or synthetic graphic.",
+            )
+
+        hist, _ = np.histogram(gray, bins=32, range=(0.0, 256.0))
+        hist_probs = hist / max(1, gray.size)
+        top2_bin_mass = float(np.sort(hist_probs)[-2:].sum())
+        if top2_bin_mass > 0.60:
+            return (
+                False,
+                0.05,
+                f"Image intensity histogram is concentrated in two discrete tones (top-2 bin mass={top2_bin_mass:.2f}), indicating a document or diagram rather than a continuous-tone radiograph.",
+            )
+
+        # 5. Neural Classifier check (if model loaded)
         if self.model is not None and HAS_TORCH:
             try:
                 tfms = transforms.Compose([
@@ -94,5 +124,6 @@ class DentalInputGate:
             except Exception:
                 pass
 
-        # If heuristic checks pass and no classifier failure
-        return True, 0.95, "Valid dental radiograph."
+        # Heuristic gate passed (no neural classifier checkpoint loaded)
+        heuristic_score = round(float(min(0.90, max(0.55, midtone_frac))), 2)
+        return True, heuristic_score, "Valid dental radiograph (heuristic gate)."

@@ -91,10 +91,12 @@ class DentexCocoDataset(Dataset):
             x, y, w, h = ann["bbox"]
             if w <= 0 or h <= 0:
                 continue
+            raw_x_max = float(x) + float(w)
+            raw_y_max = float(y) + float(h)
             x_min = max(0.0, float(x))
             y_min = max(0.0, float(y))
-            x_max = min(float(width), x_min + float(w))
-            y_max = min(float(height), y_min + float(h))
+            x_max = min(float(width), raw_x_max)
+            y_max = min(float(height), raw_y_max)
 
             if x_max > x_min and y_max > y_min:
                 boxes.append([x_min, y_min, x_max, y_max])

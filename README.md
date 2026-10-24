@@ -8,7 +8,7 @@
 
 **🚀 Live Interactive Demo:** [https://huggingface.co/spaces/surendra08/viscan-opg](https://huggingface.co/spaces/surendra08/viscan-opg)
 
-A production-ready deep learning system for automated finding detection in panoramic dental radiographs (OPG). Detects 4 core pathological conditions with original pixel coordinates, confidence scores, deterministic summaries, and side-by-side visual clinical review.
+An end-to-end clinical decision-support prototype for automated finding detection in panoramic dental radiographs (OPG). Detects 4 core pathological conditions with original pixel coordinates, confidence scores, deterministic summaries, and side-by-side visual clinical review.
 
 ---
 
@@ -116,7 +116,7 @@ curl -X POST "http://localhost:8000/analyze?confidence_threshold=0.70" \
     "name": "fasterrcnn_resnet50_fpn_v2",
     "version": "2.0.0"
   },
-  "inference_ms": 138.4,
+  "inference_ms": 4618.0,
   "findings": [
     {
       "class": "deep_caries",
@@ -132,6 +132,7 @@ curl -X POST "http://localhost:8000/analyze?confidence_threshold=0.70" \
     }
   ],
   "summary": "2 findings: 1 deep caries, 1 periapical lesion.",
+  "original_image_url": "/results/opg_a1b2c3d4_original.png",
   "annotated_image_url": "/results/opg_a1b2c3d4_annotated.png",
   "disclaimer": "AI-assisted findings for dentist review. Not a diagnosis."
 }
@@ -142,7 +143,7 @@ curl -X POST "http://localhost:8000/analyze?confidence_threshold=0.70" \
 ## 6. Dataset Preparation & Training
 
 ### Prepare Data
-Downloads official DENTEX (MICCAI 2023) benchmark, verifies official 705/50/250 split, and converts annotations to standard COCO JSON:
+Downloads the official DENTEX (MICCAI 2023) benchmark, creates the deterministic `SEED=42` 3-way split (`635` train / `70` val from `training_data.zip`, and `50` held-out test from `validation_data.zip`), copies images into `images/train`, `images/val`, and `images/test`, and writes COCO JSON annotations (`instances_train.json`, `instances_val.json`, `instances_test.json`):
 ```bash
 python prepare_data.py data/dentex
 ```

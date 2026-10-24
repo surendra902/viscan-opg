@@ -22,14 +22,18 @@ from PIL import Image, ImageDraw, ImageFont
 
 try:
     import torch
-    from torchvision import transforms
     HAS_TORCH = True
 except ImportError:
     HAS_TORCH = False
 
+try:
+    from torchvision import transforms
+except ImportError:
+    transforms = None
+
 from imaging import load_image_bytes, ImageProcessingError
 from input_gate import DentalInputGate, NonDentalInputError
-from model import build_model_from_config, load_model_weights, CLASS_NAMES
+from model import build_model_from_config, load_model_weights, CLASS_NAMES, HAS_TORCHVISION
 
 # Consistent visual palette for classes
 CLASS_COLORS = {
@@ -40,6 +44,11 @@ CLASS_COLORS = {
 }
 
 DISCLAIMER_TEXT = "AI-assisted findings for dentist review. Not a diagnosis."
+
+
+class ModelNotLoadedError(RuntimeError):
+    """Raised when inference is requested but detector weights are not loaded."""
+    pass
 
 
 class DentalAnalysisService:
@@ -58,7 +67,7 @@ class DentalAnalysisService:
         self.model = None
         self.input_gate = DentalInputGate(device=device)
 
-        if HAS_TORCH and weights_path and os.path.exists(weights_path):
+        if HAS_TORCH and HAS_TORCHVISION and weights_path and os.path.exists(weights_path):
             cfg = config or {
                 "model": {
                     "name": "fasterrcnn_resnet50_fpn_v2",
@@ -90,43 +99,55 @@ class DentalAnalysisService:
         if not is_valid:
             raise NonDentalInputError(f"Input rejected: {gate_msg}")
 
-        # 3. Model Inference
+        # 3. Model Inference (fail closed if model checkpoint is unavailable)
+        if self.model is None or not HAS_TORCH:
+            raise ModelNotLoadedError(
+                "Detector model weights are not loaded. Provide a valid checkpoint via VISCAN_WEIGHTS_PATH or checkpoints/best_model.pth."
+            )
+
         findings = []
-        if self.model is not None and HAS_TORCH:
+        if transforms is not None:
             tensor = transforms.functional.to_tensor(img_pil).to(self.device)
-            with torch.no_grad():
-                outputs = self.model([tensor])
-                out = outputs[0]
+        else:
+            arr = np.asarray(img_pil.convert("RGB"), dtype=np.float32) / 255.0
+            tensor = torch.from_numpy(arr).permute(2, 0, 1).contiguous().to(self.device)
+        with torch.no_grad():
+            outputs = self.model([tensor])
+            out = outputs[0]
 
-            boxes = out["boxes"].cpu().numpy()
-            scores = out["scores"].cpu().numpy()
-            labels = out["labels"].cpu().numpy()
+        boxes = out["boxes"].cpu().numpy()
+        scores = out["scores"].cpu().numpy()
+        labels = out["labels"].cpu().numpy()
 
-            for box, score, label in zip(boxes, scores, labels):
-                score_val = float(score)
-                if score_val < threshold:
-                    continue
+        for box, score, label in zip(boxes, scores, labels):
+            score_val = float(score)
+            if score_val < threshold:
+                continue
 
-                label_int = int(label)
-                class_name = CLASS_NAMES.get(label_int, f"finding_{label_int}")
-                if class_name == "background":
-                    continue
+            label_int = int(label)
+            class_name = CLASS_NAMES.get(label_int, f"finding_{label_int}")
+            if class_name == "background":
+                continue
 
-                # Ensure box stays within original image bounds
-                x_min = max(0.0, min(float(orig_w), float(box[0])))
-                y_min = max(0.0, min(float(orig_h), float(box[1])))
-                x_max = max(0.0, min(float(orig_w), float(box[2])))
-                y_max = max(0.0, min(float(orig_h), float(box[3])))
+            # Ensure box stays within original image bounds
+            x_min = max(0.0, min(float(orig_w), float(box[0])))
+            y_min = max(0.0, min(float(orig_h), float(box[1])))
+            x_max = max(0.0, min(float(orig_w), float(box[2])))
+            y_max = max(0.0, min(float(orig_h), float(box[3])))
 
-                if x_max > x_min and y_max > y_min:
-                    findings.append({
-                        "class": class_name,
-                        "confidence": round(score_val, 2),
-                        "tooth_fdi": None,
-                        "bbox": [round(x_min, 1), round(y_min, 1), round(x_max, 1), round(y_max, 1)],
-                    })
+            if x_max > x_min and y_max > y_min:
+                findings.append({
+                    "class": class_name,
+                    "confidence": round(score_val, 2),
+                    "tooth_fdi": None,
+                    "bbox": [round(x_min, 1), round(y_min, 1), round(x_max, 1), round(y_max, 1)],
+                })
 
-        # 4. Generate Annotated Image
+        # 4. Save Original (decoded PNG for DICOM preview) and Annotated Image
+        original_filename = f"{image_id}_original.png"
+        original_filepath = self.results_dir / original_filename
+        img_pil.save(original_filepath, format="PNG")
+
         annotated_img = self._draw_annotations(img_pil, findings)
         annotated_filename = f"{image_id}_annotated.png"
         annotated_filepath = self.results_dir / annotated_filename
@@ -147,6 +168,7 @@ class DentalAnalysisService:
             "inference_ms": inference_ms,
             "findings": findings,
             "summary": summary,
+            "original_image_url": f"/results/{original_filename}",
             "annotated_image_url": f"/results/{annotated_filename}",
             "disclaimer": DISCLAIMER_TEXT,
         }
