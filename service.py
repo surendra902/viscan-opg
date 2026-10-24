@@ -165,9 +165,8 @@ class DentalAnalysisService:
         annotated_filepath = self.results_dir / annotated_filename
         annotated_img.save(annotated_filepath, format="PNG")
 
-        # 5. Deterministic Human-Readable Summary & Input-Specific 3D Relief + Bounding-Box GLB
+        # 5. Deterministic Human-Readable Summary
         summary = self._generate_summary(findings)
-        opg_glb_url = export_opg_3d_relief_glb(img_pil, findings, self.results_dir, image_id)
 
         inference_ms = round((time.perf_counter() - t_start) * 1000.0, 1)
 
@@ -183,7 +182,6 @@ class DentalAnalysisService:
             "summary": summary,
             "original_image_url": f"/results/{original_filename}",
             "annotated_image_url": f"/results/{annotated_filename}",
-            "mesh_glb_url": opg_glb_url,
             "disclaimer": DISCLAIMER_TEXT,
         }
 
@@ -209,12 +207,18 @@ class DentalAnalysisService:
             seg_xyz = self._run_live_nnunet_cbct(vol_xyz, spacing_xyz, Path(cbct_weights_dir))
 
         sample_dir = Path(__file__).resolve().parent / "samples" / "cbct"
-        sample_glb = sample_dir / "PostDentalSurgery_scene.glb"
-        is_reference_sample = (
-            vol_xyz.shape == (360, 360, 330)
-            and int((seg_xyz == 5).sum()) == 6063
-            and sample_glb.exists()
+        present_cids = tuple(sorted(int(x) for x in np.unique(seg_xyz) if x > 0))
+        preset_glb_map = {
+            (1, 2, 3, 4, 5): sample_dir / "PostDentalSurgery_scene.glb",
+            (2, 3, 4, 5): sample_dir / "Jaws_Teeth_Canal_scene.glb",
+            (3, 4, 5): sample_dir / "Surgical_Nerve_Clearance_scene.glb",
+        }
+        matched_preset_glb = (
+            preset_glb_map.get(present_cids)
+            if (vol_xyz.shape == (360, 360, 330) and int((seg_xyz == 5).sum()) == 6063)
+            else None
         )
+        is_reference_sample = matched_preset_glb is not None and matched_preset_glb.exists()
 
         seg_clean, structure_stats, findings = postprocess_and_compute_findings(
             seg_xyz, spacing_xyz, apply_island_filter=not is_reference_sample
@@ -222,35 +226,28 @@ class DentalAnalysisService:
 
         orig_filename = f"{image_id}_original.png"
         annot_filename = f"{image_id}_annotated.png"
-        sample_orig_png = sample_dir / "PostDentalSurgery_cbct_original.png"
-        sample_ortho_png = sample_dir / "PostDentalSurgery_cbct_ortho.png"
+        render_cbct_ortho_views(
+            vol_xyz,
+            seg_clean,
+            findings,
+            self.results_dir / orig_filename,
+            self.results_dir / annot_filename,
+        )
 
-        if is_reference_sample and sample_orig_png.exists() and sample_ortho_png.exists():
-            import shutil
-            shutil.copy2(sample_orig_png, self.results_dir / orig_filename)
-            shutil.copy2(sample_ortho_png, self.results_dir / annot_filename)
-        else:
-            render_cbct_ortho_views(
-                vol_xyz,
-                seg_clean,
-                findings,
-                self.results_dir / orig_filename,
-                self.results_dir / annot_filename,
-            )
-
-        # Use precomputed Marching Cubes GLB/STL if matching reference sample (360x360x330)
+        # Use pre-smoothed SlicerDentalSegmentator Marching Cubes GLB/STL if matching one of the 3 verified presets
         if is_reference_sample:
             import shutil
             glb_filename = f"{image_id}_scene.glb"
-            shutil.copy2(sample_glb, self.results_dir / glb_filename)
+            shutil.copy2(matched_preset_glb, self.results_dir / glb_filename)
             mesh_glb_url = f"/results/{glb_filename}"
             mesh_stl_urls = {}
-            for cname in structure_stats.keys():
-                src_stl = sample_dir / f"PostDentalSurgery_{cname}.stl"
-                if src_stl.exists():
-                    dst_name = f"{image_id}_{cname}.stl"
-                    shutil.copy2(src_stl, self.results_dir / dst_name)
-                    mesh_stl_urls[cname] = f"/results/{dst_name}"
+            for cname, st_info in structure_stats.items():
+                if st_info["voxel_count"] > 0:
+                    src_stl = sample_dir / f"PostDentalSurgery_{cname}.stl"
+                    if src_stl.exists():
+                        dst_name = f"{image_id}_{cname}.stl"
+                        shutil.copy2(src_stl, self.results_dir / dst_name)
+                        mesh_stl_urls[cname] = f"/results/{dst_name}"
         else:
             mesh_glb_url, mesh_stl_urls = export_cbct_meshes(
                 seg_clean, spacing_xyz, self.results_dir, image_id

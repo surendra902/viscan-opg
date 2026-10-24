@@ -108,9 +108,17 @@ async def analyze_opg(
 
 
 @app.post("/analyze/sample_cbct")
-def analyze_sample_cbct():
-    """Runs the 3D CBCT post-processing, nerve-distance, and 3D mesh pipeline on the verified CBCT sample."""
-    sample_path = SAMPLES_DIR / "cbct" / "PostDentalSurgery_Segmentation.nii.gz"
+def analyze_sample_cbct(view: str = Query("jaws", description="CBCT preset view: full, jaws, or surgical")):
+    """Runs the 3D CBCT post-processing, nerve-distance, and 3D mesh pipeline on the selected verified CBCT view."""
+    view_map = {
+        "full": "PostDentalSurgery_Segmentation.nii.gz",
+        "jaws": "Jaws_Teeth_Canal_CBCT.nii.gz",
+        "surgical": "Surgical_Nerve_Clearance_CBCT.nii.gz",
+    }
+    fname = view_map.get(view, "Jaws_Teeth_Canal_CBCT.nii.gz")
+    sample_path = SAMPLES_DIR / "cbct" / fname
+    if not sample_path.exists():
+        sample_path = SAMPLES_DIR / "cbct" / "PostDentalSurgery_Segmentation.nii.gz"
     if not sample_path.exists():
         raise HTTPException(status_code=404, detail="Sample CBCT volume not found in samples/cbct/.")
     result = service.analyze_cbct_bytes(sample_path.read_bytes(), sample_path.name)
@@ -356,13 +364,17 @@ def index_page():
         </div>
       </div>
 
-      <!-- Interactive 3D CBCT Mesh Viewer (preloaded with verified PostDentalSurgery_scene.glb) -->
-      <div id="cbct3dSection" style="display: block; margin-top: 18px; background: #0b1120; border: 1px solid var(--border); border-radius: 8px; padding: 14px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-          <h3 style="font-size: 15px; color: var(--primary);">Interactive 3D CBCT Surface Mesh (Marching Cubes — Orbit / Zoom / Pan)</h3>
-          <span style="font-size: 12px; color: var(--text-muted);">Pretrained DentalSegmentator (nnU-Net v2, CC BY 4.0)</span>
+      <!-- Interactive 3D CBCT Mesh Viewer (shown when modality === 'CBCT') -->
+      <div id="cbct3dSection" style="display: none; margin-top: 18px; background: #0b1120; border: 1px solid var(--border); border-radius: 8px; padding: 14px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
+          <h3 style="font-size: 15px; color: var(--primary);">Interactive 3D CBCT Anatomical Mesh (3D Slicer DentalSegmentator — Orbit / Zoom / Pan)</h3>
+          <div style="display: flex; gap: 6px;">
+            <button onclick="loadSampleCbct('full')" style="padding: 4px 10px; font-size: 12px; border-radius: 4px; border: 1px solid var(--border); background: #1e293b; color: #f8fafc; cursor: pointer;">Full Skull</button>
+            <button onclick="loadSampleCbct('jaws')" style="padding: 4px 10px; font-size: 12px; border-radius: 4px; border: 1px solid var(--primary); background: #0284c7; color: #fff; cursor: pointer;">Jaws + Teeth + Canal</button>
+            <button onclick="loadSampleCbct('surgical')" style="padding: 4px 10px; font-size: 12px; border-radius: 4px; border: 1px solid var(--border); background: #1e293b; color: #f8fafc; cursor: pointer;">Teeth Roots + Canal (0.71mm)</button>
+          </div>
         </div>
-        <model-viewer id="cbctModelViewer" src="/samples/cbct/PostDentalSurgery_scene.glb" alt="3D CBCT Dental Segmentation" camera-controls auto-rotate shadow-intensity="1" style="width: 100%; height: 420px; background-color: #090d16; border-radius: 6px;"></model-viewer>
+        <model-viewer id="cbctModelViewer" src="" alt="3D CBCT Dental Segmentation" camera-controls auto-rotate shadow-intensity="0.8" style="width: 100%; height: 440px; background-color: #f8fafc; border-radius: 6px;"></model-viewer>
       </div>
 
       <div class="findings-card">
@@ -445,11 +457,11 @@ def index_page():
       }
     };
 
-    sampleCbctBtn.onclick = async () => {
+    async function loadSampleCbct(viewMode = 'jaws') {
       sampleCbctBtn.disabled = true;
-      showStatus('Running 3D CBCT post-processing & mesh pipeline on PostDentalSurgery sample...', true, false);
+      showStatus(`Running 3D CBCT post-processing & Slicer mesh pipeline (${viewMode} view)...`, true, false);
       try {
-        const resp = await fetch('/analyze/sample_cbct', { method: 'POST' });
+        const resp = await fetch(`/analyze/sample_cbct?view=${viewMode}`, { method: 'POST' });
         const data = await resp.json();
         if (!resp.ok) throw new Error(data.detail || 'Sample CBCT analysis failed.');
         latestResult = data;
@@ -460,7 +472,9 @@ def index_page():
       } finally {
         sampleCbctBtn.disabled = false;
       }
-    };
+    }
+
+    sampleCbctBtn.onclick = () => loadSampleCbct('jaws');
 
     analyzeBtn.onclick = async () => {
       if (!selectedFile) return;
@@ -498,12 +512,12 @@ def index_page():
       summaryText.textContent = data.summary;
       annotPreview.innerHTML = `<img src="${data.annotated_image_url}" alt="Annotated">`;
 
-      if (data.mesh_glb_url) {
+      if (data.modality === 'CBCT' && data.mesh_glb_url) {
         cbct3dSection.style.display = 'block';
         cbctModelViewer.src = data.mesh_glb_url;
         downloadGlbBtn.style.display = 'inline-block';
         downloadGlbBtn.href = data.mesh_glb_url;
-        downloadGlbBtn.download = `${data.image_id}_3d.glb`;
+        downloadGlbBtn.download = `${data.image_id}_scene.glb`;
       } else {
         cbct3dSection.style.display = 'none';
         downloadGlbBtn.style.display = 'none';

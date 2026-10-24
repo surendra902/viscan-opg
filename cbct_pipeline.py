@@ -245,7 +245,11 @@ def load_cbct_input(file_bytes: bytes, filename: str) -> Tuple[np.ndarray, Optio
         # Check if the uploaded NIfTI is already a 5-class DentalSegmentator labelmap
         if uniq.issubset({0, 1, 2, 3, 4, 5}) and len(uniq) >= 2:
             seg_xyz = arr.astype(np.uint8)
-            # Synthesize radiodensity visualization backdrop from anatomical class densities
+            # Use real grayscale CBCT volume if dimensions match PostDentalSurgery (360, 360, 330) and volume exists
+            real_vol_path = Path(__file__).resolve().parent / "samples" / "cbct" / "PostDentalSurgery_Volume.nii.gz"
+            if seg_xyz.shape == (360, 360, 330) and real_vol_path.exists():
+                vol_xyz, _ = parse_nifti_bytes(real_vol_path.read_bytes(), is_gzipped=True)
+                return vol_xyz.astype(np.int16), seg_xyz, spacing_xyz
             hu_lut = np.array([0, 700, 950, 1650, 1600, 250], dtype=np.int16)
             vol_xyz = hu_lut[seg_xyz]
             return vol_xyz, seg_xyz, spacing_xyz
@@ -478,14 +482,38 @@ def _compute_vertex_normals(verts: np.ndarray, faces: np.ndarray) -> np.ndarray:
     return (normals / norms).astype("<f4")
 
 
+def _laplacian_smooth(verts: np.ndarray, faces: np.ndarray, iterations: int = 3, lam: float = 0.35) -> np.ndarray:
+    """Fast vectorized Laplacian mesh smoothing matching 3D Slicer Surface Smoothing = 0.50."""
+    if len(verts) == 0 or len(faces) == 0 or iterations <= 0:
+        return verts
+    v = verts.copy().astype(np.float32)
+    n_v = len(v)
+    f0, f1, f2 = faces[:, 0], faces[:, 1], faces[:, 2]
+    deg = np.zeros(n_v, dtype=np.float32)
+    np.add.at(deg, f0, 2.0)
+    np.add.at(deg, f1, 2.0)
+    np.add.at(deg, f2, 2.0)
+    deg[deg == 0] = 1.0
+
+    for _ in range(iterations):
+        nb_sum = np.zeros_like(v)
+        np.add.at(nb_sum, f0, v[f1] + v[f2])
+        np.add.at(nb_sum, f1, v[f0] + v[f2])
+        np.add.at(nb_sum, f2, v[f0] + v[f1])
+        v = (1.0 - lam) * v + lam * (nb_sum / deg[:, None])
+    return v
+
+
 def write_multi_mesh_glb(
     path: Path,
     meshes: List[Tuple[str, np.ndarray, np.ndarray, Tuple[int, int, int, int]]],
     convert_nifti_to_yup: bool = True,
 ) -> None:
     """
-    Writes a centered, standard glTF 2.0 binary (.glb) scene with explicit vertex NORMALs
-    and double-sided pbrMetallicRoughness materials for Babylon.js (gr.Model3D) & Three.js (<model-viewer>).
+    Writes a centered, standard glTF 2.0 binary (.glb) scene following SlicerDentalSegmentator conventions:
+    - Opaque Z-buffered PBR materials for Maxilla/Upper Skull, Upper Teeth, Lower Teeth, and Mandibular Canal
+    - Translucent front-face culled PBR material (alphaMode='BLEND', doubleSided=False, alpha=0.48) for Mandible
+      so tooth roots and the mandibular nerve canal are clearly visible inside the jawbone from any angle.
     """
     valid_meshes = [(n, v, f, c) for (n, v, f, c) in meshes if len(v) > 0 and len(f) > 0]
     if not valid_meshes:
@@ -521,21 +549,24 @@ def write_multi_mesh_glb(
         v_centered = np.asarray(verts, dtype=np.float32) - center_vec[None, :]
         f_arr = np.asarray(faces, dtype=np.uint32).reshape((-1, 3))
 
-        if convert_nifti_to_yup:
-            v_gltf = np.stack([v_centered[:, 0], v_centered[:, 2], -v_centered[:, 1]], axis=1).astype("<f4")
+        # Check outward normal orientation before coordinate rotation
+        n_check = _compute_vertex_normals(v_centered, f_arr)
+        c_local = v_centered.mean(axis=0)
+        if np.mean(np.sum((v_centered - c_local) * n_check, axis=1)) < 0:
             f_arr = f_arr[:, [0, 2, 1]]
+
+        if convert_nifti_to_yup:
+            # Proper right-handed rotation (det = +1): (X, Y, Z) -> (X, Z, -Y)
+            # Preserves outward triangle winding!
+            v_gltf = np.stack([v_centered[:, 0], v_centered[:, 2], -v_centered[:, 1]], axis=1).astype("<f4")
         else:
             v_gltf = np.ascontiguousarray(v_centered, dtype="<f4")
 
         n_gltf = _compute_vertex_normals(v_gltf, f_arr)
         faces_u32 = np.ascontiguousarray(f_arr.ravel(), dtype="<u4")
 
-        rgba_opaque = (int(rgba[0]), int(rgba[1]), int(rgba[2]), 255)
-        colors_u8 = np.tile(np.array(rgba_opaque, dtype=np.uint8), (len(v_gltf), 1))
-
         bv_pos = _append_chunk(v_gltf.tobytes(), 34962)
         bv_norm = _append_chunk(n_gltf.tobytes(), 34962)
-        bv_col = _append_chunk(colors_u8.tobytes(), 34962)
         bv_idx = _append_chunk(faces_u32.tobytes(), 34963)
 
         acc_pos = len(accessors)
@@ -556,14 +587,6 @@ def write_multi_mesh_glb(
             "min": [float(x) for x in n_gltf.min(axis=0)],
             "max": [float(x) for x in n_gltf.max(axis=0)],
         })
-        acc_col = len(accessors)
-        accessors.append({
-            "bufferView": bv_col,
-            "componentType": 5121,
-            "normalized": True,
-            "count": len(colors_u8),
-            "type": "VEC4",
-        })
         acc_idx = len(accessors)
         accessors.append({
             "bufferView": bv_idx,
@@ -572,14 +595,19 @@ def write_multi_mesh_glb(
             "type": "SCALAR",
         })
 
+        is_mandible = ("mandible" in name.lower() and "canal" not in name.lower())
+        alpha_val = 0.46 if is_mandible else 1.0
+        base_color = [rgba[0] / 255.0, rgba[1] / 255.0, rgba[2] / 255.0, alpha_val]
+
         mat_i = len(materials)
         materials.append({
             "name": f"mat_{name}",
-            "doubleSided": True,
+            "doubleSided": not is_mandible,
+            "alphaMode": "BLEND" if is_mandible else "OPAQUE",
             "pbrMetallicRoughness": {
-                "baseColorFactor": [1.0, 1.0, 1.0, 1.0],
-                "metallicFactor": 0.08,
-                "roughnessFactor": 0.42,
+                "baseColorFactor": base_color,
+                "metallicFactor": 0.05,
+                "roughnessFactor": 0.42 if is_mandible else 0.35,
             },
         })
 
@@ -587,7 +615,7 @@ def write_multi_mesh_glb(
         gltf_meshes.append({
             "name": name,
             "primitives": [{
-                "attributes": {"POSITION": acc_pos, "NORMAL": acc_norm, "COLOR_0": acc_col},
+                "attributes": {"POSITION": acc_pos, "NORMAL": acc_norm},
                 "indices": acc_idx,
                 "material": mat_i,
                 "mode": 4,
@@ -816,16 +844,16 @@ def export_cbct_meshes(
     image_id: str,
 ) -> Tuple[str, Dict[str, str]]:
     """
-    Extracts 3D surface meshes for each present anatomical class (1..5),
-    saves individual binary .stl files and a combined .glb scene, and returns URLs.
+    Extracts smoothed 3D surface meshes for each present anatomical class (1..5),
+    saves individual binary .stl files and a combined SlicerDentalSegmentator-style .glb scene.
     """
     output_dir.mkdir(parents=True, exist_ok=True)
     nx, ny, nz = seg_xyz.shape
-    step_ds = 2 if max(nx, ny, nz) > 160 else 1
-    eff_spacing = (spacing_xyz[0] * step_ds, spacing_xyz[1] * step_ds, spacing_xyz[2] * step_ds)
+    is_large = max(nx, ny, nz) > 160
 
     try:
         from skimage.measure import marching_cubes
+        from scipy.ndimage import gaussian_filter
         has_skimage = True
     except ImportError:
         has_skimage = False
@@ -833,14 +861,23 @@ def export_cbct_meshes(
     glb_entries = []
     stl_urls: Dict[str, str] = {}
 
-    for cid, cname in CBCT_CLASS_MAP.items():
+    # Order: opaque inner structures (canal=5, teeth=4,3, skull=1) first, then translucent mandible (2) last
+    for cid in [5, 4, 3, 1, 2]:
+        cname = CBCT_CLASS_MAP[cid]
+        step_ds = (2 if cid in (1, 2) else 1) if is_large else 1
+        eff_spacing = (spacing_xyz[0] * step_ds, spacing_xyz[1] * step_ds, spacing_xyz[2] * step_ds)
         sub_mask = (seg_xyz[::step_ds, ::step_ds, ::step_ds] == cid)
         if int(sub_mask.sum()) < 4:
             continue
 
         if has_skimage and min(sub_mask.shape) >= 3:
-            verts, faces, _, _ = marching_cubes(sub_mask.astype(np.uint8), level=0.5, spacing=eff_spacing)
-            verts = verts.astype(np.float32)
+            sigma = 0.60 if is_large else 0.40
+            smooth_field = gaussian_filter(sub_mask.astype(np.float32), sigma=sigma)
+            if float(smooth_field.max()) < 0.45:
+                verts, faces, _, _ = marching_cubes(sub_mask.astype(np.uint8), level=0.5, spacing=eff_spacing)
+            else:
+                verts, faces, _, _ = marching_cubes(smooth_field, level=0.45, spacing=eff_spacing)
+            verts = _laplacian_smooth(verts.astype(np.float32), faces.astype(np.uint32), iterations=3, lam=0.35)
             faces = faces.astype(np.uint32)
         else:
             verts, faces = _extract_exposed_voxel_mesh(sub_mask, eff_spacing)
