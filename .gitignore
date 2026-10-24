@@ -1,0 +1,33 @@
+# Python & Environment
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+env/
+venv/
+ENV/
+
+# Checkpoints & Weights (host on Hugging Face Hub instead)
+*.pth
+*.pt
+checkpoints/*.pth
+runs/
+
+# Datasets & Temporary
+data/
+*.dcm
+.pytest_cache/
+.coverage
+htmlcov/
+*.log
+step_*.txt
+subagent_*.txt
+
+# Results & Intermediate
+results/*.png
+results/*.json
+!samples/
+_tmp/
+hf_space/

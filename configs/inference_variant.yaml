@@ -1,0 +1,52 @@
+# Viscan OPG Variant Configuration (960x1600)
+# Same architecture as baseline but with higher input resolution
+# NOTE: batch_size reduced from 2 to 1 to avoid GPU OOM at higher resolution.
+#       This changes optimizer dynamics (2x steps at same LR) and is a documented confound.
+
+seed: 42
+
+data:
+  dataset_name: "DENTEX"
+  source: "huggingface.co/datasets/ibrahimhamamci/DENTEX"
+  data_licence: "CC BY-NC-SA 4.0"
+  data_dir: "data/dentex"
+  categories:
+    0: "background"
+    1: "impacted_tooth"
+    2: "caries"
+    3: "periapical_lesion"
+    4: "deep_caries"
+  num_classes: 5
+
+training:
+  batch_size: 1  # reduced from 2 due to OOM at 960x1600
+  num_workers: 2
+  epochs: 12
+  lr: 0.005
+  momentum: 0.9
+  weight_decay: 0.0005
+  lr_scheduler: "CosineAnnealingLR"
+  lr_eta_min_factor: 0.01
+  augmentation: "HFlip(0.5)+ColorJitter(brightness=0.15,contrast=0.15)"
+  amp: true
+  checkpoint_dir: "checkpoints"
+  output_dir: "runs/variant"
+
+model:
+  name: "fasterrcnn_resnet50_fpn_v2"
+  weights: "FasterRCNN_ResNet50_FPN_V2_Weights.COCO_V1"
+  code_licence: "BSD-3-Clause"
+  min_size: 960
+  max_size: 1600
+  box_score_thresh: 0.001
+  box_detections_per_img: 300
+  box_nms_thresh: 0.5
+  rpn_score_thresh: 0.0
+  rpn_pre_nms_top_n_test: 1000
+  rpn_post_nms_top_n_test: 1000
+  rpn_nms_thresh: 0.7
+
+evaluation:
+  ui_confidence_threshold: 0.50
+  iou_threshold: 0.50
+  max_dets: [1, 10, 100]

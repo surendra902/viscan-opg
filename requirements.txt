@@ -1,0 +1,21 @@
+# Core Machine Learning & Vision
+torch>=2.1.0
+torchvision>=0.16.0
+pycocotools>=2.0.7
+numpy>=1.24.0,<2.0.0
+Pillow>=10.0.0
+matplotlib>=3.7.0
+
+# Medical Imaging (DICOM)
+pydicom>=2.4.0
+
+# Backend & Web Service
+fastapi>=0.100.0
+uvicorn[standard]>=0.22.0
+python-multipart>=0.0.6
+pydantic>=2.0.0
+pyyaml>=6.0
+
+# Testing & Quality
+pytest>=7.4.0
+httpx>=0.24.0

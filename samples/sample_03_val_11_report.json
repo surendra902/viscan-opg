@@ -1,0 +1,13 @@
+{
+  "image_id": "sample_03_val_11",
+  "modality": "OPG",
+  "model": {
+    "name": "fasterrcnn_resnet50_fpn_v2",
+    "version": "2.0.0"
+  },
+  "inference_ms": 7231.2,
+  "findings": [],
+  "summary": "No pathological findings detected at current confidence threshold.",
+  "annotated_image_url": "/results/sample_03_val_11_annotated.png",
+  "disclaimer": "AI-assisted findings for dentist review. Not a diagnosis."
+}

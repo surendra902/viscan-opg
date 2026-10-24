@@ -1,0 +1,20 @@
+version: "3.8"
+
+services:
+  viscan:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./checkpoints:/app/checkpoints
+      - ./results:/app/results
+    environment:
+      - VISCAN_WEIGHTS_PATH=checkpoints/best_model.pth
+      - VISCAN_THRESHOLD=0.70
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/docs"]
+      interval: 30s
+      timeout: 10s
+      retries: 3

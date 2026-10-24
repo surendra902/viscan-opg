@@ -1,0 +1,80 @@
+{
+  "image_id": "sample_04_val_14",
+  "modality": "OPG",
+  "model": {
+    "name": "fasterrcnn_resnet50_fpn_v2",
+    "version": "2.0.0"
+  },
+  "inference_ms": 6778.0,
+  "findings": [
+    {
+      "class": "caries",
+      "confidence": 0.98,
+      "tooth_fdi": null,
+      "bbox": [
+        1676.6,
+        417.6,
+        1791.9,
+        723.9
+      ]
+    },
+    {
+      "class": "caries",
+      "confidence": 0.98,
+      "tooth_fdi": null,
+      "bbox": [
+        1654.5,
+        710.2,
+        1878.9,
+        1020.2
+      ]
+    },
+    {
+      "class": "caries",
+      "confidence": 0.96,
+      "tooth_fdi": null,
+      "bbox": [
+        862.1,
+        404.5,
+        1027.8,
+        715.8
+      ]
+    },
+    {
+      "class": "impacted_tooth",
+      "confidence": 0.95,
+      "tooth_fdi": null,
+      "bbox": [
+        1924.2,
+        656.5,
+        2221.6,
+        850.2
+      ]
+    },
+    {
+      "class": "deep_caries",
+      "confidence": 0.95,
+      "tooth_fdi": null,
+      "bbox": [
+        1787.7,
+        683.9,
+        1997.6,
+        987.4
+      ]
+    },
+    {
+      "class": "caries",
+      "confidence": 0.85,
+      "tooth_fdi": null,
+      "bbox": [
+        750.9,
+        373.7,
+        915.0,
+        684.8
+      ]
+    }
+  ],
+  "summary": "6 findings: 4 caries, 1 deep caries, 1 impacted tooth.",
+  "annotated_image_url": "/results/sample_04_val_14_annotated.png",
+  "disclaimer": "AI-assisted findings for dentist review. Not a diagnosis."
+}

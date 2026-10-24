@@ -1,0 +1,146 @@
+{
+  "image_id": "sample_02_val_10",
+  "modality": "OPG",
+  "model": {
+    "name": "fasterrcnn_resnet50_fpn_v2",
+    "version": "2.0.0"
+  },
+  "inference_ms": 7662.0,
+  "findings": [
+    {
+      "class": "caries",
+      "confidence": 0.98,
+      "tooth_fdi": null,
+      "bbox": [
+        1686.7,
+        477.9,
+        1797.5,
+        762.1
+      ]
+    },
+    {
+      "class": "caries",
+      "confidence": 0.97,
+      "tooth_fdi": null,
+      "bbox": [
+        1032.2,
+        781.7,
+        1138.5,
+        1065.8
+      ]
+    },
+    {
+      "class": "caries",
+      "confidence": 0.96,
+      "tooth_fdi": null,
+      "bbox": [
+        2000.4,
+        715.6,
+        2244.9,
+        944.7
+      ]
+    },
+    {
+      "class": "caries",
+      "confidence": 0.96,
+      "tooth_fdi": null,
+      "bbox": [
+        1775.6,
+        498.9,
+        1911.1,
+        757.0
+      ]
+    },
+    {
+      "class": "deep_caries",
+      "confidence": 0.95,
+      "tooth_fdi": null,
+      "bbox": [
+        1746.1,
+        760.3,
+        1968.5,
+        1057.9
+      ]
+    },
+    {
+      "class": "caries",
+      "confidence": 0.95,
+      "tooth_fdi": null,
+      "bbox": [
+        1669.4,
+        795.1,
+        1841.8,
+        1081.9
+      ]
+    },
+    {
+      "class": "deep_caries",
+      "confidence": 0.89,
+      "tooth_fdi": null,
+      "bbox": [
+        955.0,
+        473.6,
+        1069.3,
+        762.3
+      ]
+    },
+    {
+      "class": "caries",
+      "confidence": 0.87,
+      "tooth_fdi": null,
+      "bbox": [
+        749.2,
+        455.9,
+        885.7,
+        710.3
+      ]
+    },
+    {
+      "class": "caries",
+      "confidence": 0.84,
+      "tooth_fdi": null,
+      "bbox": [
+        846.6,
+        483.4,
+        984.7,
+        746.4
+      ]
+    },
+    {
+      "class": "caries",
+      "confidence": 0.8,
+      "tooth_fdi": null,
+      "bbox": [
+        685.0,
+        734.4,
+        967.1,
+        973.3
+      ]
+    },
+    {
+      "class": "caries",
+      "confidence": 0.79,
+      "tooth_fdi": null,
+      "bbox": [
+        854.4,
+        756.8,
+        1069.3,
+        1069.9
+      ]
+    },
+    {
+      "class": "caries",
+      "confidence": 0.76,
+      "tooth_fdi": null,
+      "bbox": [
+        1613.6,
+        447.2,
+        1737.0,
+        765.3
+      ]
+    }
+  ],
+  "summary": "12 findings: 10 caries, 2 deep caries.",
+  "annotated_image_url": "/results/sample_02_val_10_annotated.png",
+  "disclaimer": "AI-assisted findings for dentist review. Not a diagnosis."
+}
