@@ -8,6 +8,8 @@
 
 **🚀 Live Interactive Demo:** [https://huggingface.co/spaces/surendra08/viscan-opg](https://huggingface.co/spaces/surendra08/viscan-opg)
 
+The Space runs this FastAPI app with the Docker SDK on port 7860 and bakes in the 2D detector weights. On that CPU runtime the two pre-segmented CBCT demos and uploaded 5-class label maps render meshes, while a raw CBCT upload returns HTTP 503 because nnU-Net and the Zenodo weights are not installed there (`/health` reports `cbct.ready: false`).
+
 An end-to-end clinical decision-support prototype for automated finding detection in panoramic dental radiographs (OPG). Detects 4 core pathological conditions with original pixel coordinates, confidence scores, deterministic summaries, and side-by-side visual clinical review. The same API also accepts 3D CBCT input; live nnU-Net inference is optional and the service fails closed when it is not installed.
 
 ---
