@@ -87,6 +87,7 @@ returns HTTP 503. Raw CBCT inference is opt-in:
 ```bash
 docker build --build-arg INSTALL_CBCT=true -t viscan-opg-cbct .
 docker run -p 8000:8000 \
+  -v "$(pwd)/checkpoints:/app/checkpoints:ro" \
   -v /path/to/cbct_weights:/cbct_weights:ro \
   -e VISCAN_CBCT_WEIGHTS_DIR=/cbct_weights \
   viscan-opg-cbct
