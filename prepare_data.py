@@ -1,10 +1,13 @@
 """
 DENTEX Dataset Downloader, Validator, and COCO-Format Converter.
 
-Official splits:
-- Train: 705 images, 3,529 boxes across 4 finding classes
-- Val: 50 images, 182 boxes
-- Test: 250 images
+Official DENTEX counts:
+- Train pool: 705 images, 3,529 boxes across 4 finding classes
+- Official validation: 50 images, 182 boxes  -> used as the held-out test set
+- Challenge test: 250 images, annotations not public -> downloaded by no script here
+
+The 705-image train pool is split deterministically (seed=42) into 635 train / 70 val.
+The 250 challenge-test images are therefore unused; totals reconcile as 705 + 50 + 250 = 1,005.
 
 Mapping (category_id_3 -> target_id):
 - 0: Impacted -> 1 (impacted_tooth)
@@ -41,7 +44,8 @@ COCO_CATEGORIES = [
     {"id": 4, "name": "deep_caries", "supercategory": "finding"},
 ]
 
-HF_BASE_URL = "https://huggingface.co/datasets/ibrahimhamamci/DENTEX/resolve/7b27ccc8e342dcb774f69adc6ca5e6c09fefce93/DENTEX"
+HF_REVISION = "7b27ccc8e342dcb774f69adc6ca5e6c09fefce93"
+HF_BASE_URL = f"https://huggingface.co/datasets/ibrahimhamamci/DENTEX/resolve/{HF_REVISION}/DENTEX"
 
 
 def download_file(url: str, dest_path: Path, desc: str = ""):
@@ -223,24 +227,21 @@ def prepare_dataset(dest_root: str = "data/dentex"):
     for d in [zips_dir, raw_dir, images_dir, ann_dir]:
         d.mkdir(parents=True, exist_ok=True)
 
-    # 1. Download Validation Annotations JSON and Archives
-    val_json_url = "https://huggingface.co/datasets/ibrahimhamamci/DENTEX/resolve/main/DENTEX/validation_triple.json"
+    # 1. Download Validation Annotations JSON and Archives (pinned revision)
+    val_json_url = f"{HF_BASE_URL}/validation_triple.json"
     val_raw_json = raw_dir / "val.json"
     download_file(val_json_url, val_raw_json, "Validation Annotations JSON")
 
     # 2. Download Training ZIP & Validation ZIP
     train_zip = zips_dir / "training_data.zip"
     val_zip = zips_dir / "validation_data.zip"
-    test_zip = zips_dir / "test_data.zip"
 
     download_file(f"{HF_BASE_URL}/training_data.zip", train_zip, "Training Images ZIP")
     download_file(f"{HF_BASE_URL}/validation_data.zip", val_zip, "Validation Images ZIP")
-    download_file(f"{HF_BASE_URL}/test_data.zip", test_zip, "Test Images ZIP")
 
     # 3. Extract diagnosis-relevant images and training JSON from zip
     extract_zip(train_zip, root / "extracted_train", members_filter=lambda m: "quadrant-enumeration-disease" in m)
     extract_zip(val_zip, root / "extracted_val")
-    extract_zip(test_zip, root / "extracted_test")
 
     train_raw_json = root / "extracted_train" / "training_data" / "quadrant-enumeration-disease" / "train_quadrant_enumeration_disease.json"
 

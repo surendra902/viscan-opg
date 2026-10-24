@@ -1,6 +1,7 @@
 """Unit and integration tests for the 3D CBCT segmentation, provenance, nerve-distance, and mesh pipeline."""
 
 import hashlib
+import gzip
 import io
 import json
 import zipfile
@@ -12,6 +13,8 @@ from fastapi.testclient import TestClient
 from PIL import Image
 
 import app as app_module
+import cbct_pipeline
+from imaging import ImageProcessingError
 from cbct_pipeline import (
     export_cbct_meshes,
     is_cbct_bytes,
@@ -397,3 +400,21 @@ def test_different_scans_produce_different_slices_models_and_findings(tmp_path: 
         for f in r["findings"]:
             assert f"{f['min_distance_mm']:.2f} mm" in r["summary"]
     assert ra["summary"] != rb["summary"]
+
+
+def test_gzip_nifti_decompression_is_bounded(monkeypatch):
+    """A gzip bomb must be rejected by the decompression cap, not decompressed in full."""
+    monkeypatch.setattr(cbct_pipeline, "MAX_NIFTI_DECOMPRESSED_BYTES", 4096)
+    bomb = gzip.compress(b"\x00" * 100_000)
+    with pytest.raises(ImageProcessingError, match="safety limit"):
+        parse_nifti_bytes(bomb)
+
+
+def test_zip_archive_uncompressed_size_is_bounded(monkeypatch):
+    """A ZIP declaring more uncompressed bytes than the cap is rejected before any member read."""
+    monkeypatch.setattr(cbct_pipeline, "MAX_ZIP_UNCOMPRESSED_BYTES", 4096)
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("scan.nii", b"\x00" * 100_000)
+    with pytest.raises(ImageProcessingError, match="safety limit"):
+        load_cbct_input(buf.getvalue(), "bomb.zip")

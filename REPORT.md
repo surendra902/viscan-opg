@@ -27,13 +27,14 @@ The detector is **Faster R-CNN with a ResNet-50 FPN V2 backbone** (`43,271,528` 
 
 | Dataset | Modality | Annotations | License | Decision & Rationale |
 |---|---|---|---|---|
-| **DENTEX (MICCAI 2023)** | OPG | 1,005 OPGs (`705` disease-labeled train pool + `50` official validation + `250` test); Quadrants, FDI enumeration, and 4 disease classes (`Impacted`, `Caries`, `Periapical Lesion`, `Deep Caries`) | CC BY-NC-SA 4.0 | **Selected.** Directly provides expert bounding-box annotations for all 4 required clinical finding classes. |
+| **DENTEX (MICCAI 2023)** | OPG | 1,005 OPGs = `705` disease-labeled train pool + `50` official validation + `250` challenge test (no public annotations); Quadrants, FDI enumeration, and 4 disease classes (`Impacted`, `Caries`, `Periapical Lesion`, `Deep Caries`) | CC BY-NC-SA 4.0 | **Selected.** Directly provides expert bounding-box annotations for all 4 required clinical finding classes. |
 | **Zhou et al. (2024)** (*BMC Oral Health*) | OPG | 2,066 images (`5,264` anomalous teeth); 7 tooth-state labels (`tooth without anomalies`, `fillings`, `root canal treatment`, `crown`, `caries`, `residual root`, `RCT + crown`) | CC BY 4.0 | **Excluded.** Focuses on restorative tooth states; merges all caries into a single label without distinguishing superficial `caries` from `deep_caries`, and omits `periapical_lesion` and `impacted_tooth`. |
 | **Tufts Dental Database** | OPG | 1,000 images; tooth masks and broad abnormality descriptors | Restricted institutional access | **Excluded.** Restricted access terms and generic abnormality categories do not map deterministically to the 4 required pathology classes. |
 
 ### 2.2 Dataset Statistics & Deterministic 3-Way Split
 
-- **Source Repository:** Hugging Face `ibrahimhamamci/DENTEX`
+- **Source Repository:** Hugging Face `ibrahimhamamci/DENTEX`, pinned to revision `7b27ccc8e342dcb774f69adc6ca5e6c09fefce93` (both archives and both annotation JSONs in `prepare_data.py` resolve to this commit).
+- **Reconciling 1,005 images with the 755-image working cohort:** DENTEX publishes `705` disease-labeled training images + `50` official validation images + `250` challenge test images (`705 + 50 + 250 = 1,005`). The 250 challenge-test images ship by design without public annotations, so they are neither downloaded nor used here; the working cohort is the `755` labeled images (`705 + 50`, `3,711` boxes).
 - **Labeled Disease Cohort:** `705` images (`3,529` boxes) from `train_quadrant_enumeration_disease.json` + `50` images (`182` boxes) from `validation_triple.json` = `755` images (`3,711` boxes) total.
 - **Deterministic 3-Way Split (`seed=42`):** Sorted image IDs from the 705-image training pool were shuffled with `random.Random(42)` to carve out `70` validation images (`339` boxes) for checkpoint selection and threshold tuning, leaving `635` training images (`3,190` boxes). The official `50`-image validation set (`182` boxes) was held out strictly as the **test set**.
 
@@ -61,7 +62,7 @@ The detector is **Faster R-CNN with a ResNet-50 FPN V2 backbone** (`43,271,528` 
 - **Coordinate Clipping:** Source COCO bounding boxes `[x, y, w, h]` are converted to `[x_min, y_min, x_max, y_max]` by computing `x_max = min(W, x + w)` and `y_max = min(H, y + h)` prior to clamping `x_min = max(0, x)` and `y_min = max(0, y)`, preventing negative-origin box shifting.
 - **DICOM Ingestion:** Single-frame 2D monochrome DICOMs undergo Modality LUT rescaling (`apply_modality_lut`: `pixel * RescaleSlope + RescaleIntercept`) **prior** to VOI LUT / `WindowCenter`–`WindowWidth` windowing (`apply_voi_lut`), followed by `[0, 255]` normalization, `MONOCHROME1` polarity inversion, and complete stripping of patient tags.
 - **Input Gate:** Rejects empty/corrupt files, multiframe or non-monochrome DICOMs, portrait aspect ratios (`< 0.65`), chromatic photographs (`mean RGB channel diff > 25`), low-contrast/blank inputs (`std < 8`), and bimodal/white-background text documents or screenshots (`near-white fraction > 0.35`, `mid-tone fraction < 0.25`, or `top-2 histogram bin mass > 0.60`).
-- **Class Imbalance:** In the 635-image training split, `caries` (`2,004` boxes) outnumbers `periapical_lesion` (`144` boxes) by `13.9:1` (`22.3:1` in image-level support on the test set, where `n = 9`). No class-weighted loss or oversampling was applied in the baseline run; this is documented as a primary limitation.
+- **Class Imbalance:** In the 635-image training split, `caries` (`2,004` boxes) outnumbers `periapical_lesion` (`144` boxes) by `2,004 / 144 = 13.9:1` (the same pair on the 50-image test set is `101 / 9 = 11.2:1` in boxes; image-level support is `n = 9`). No class-weighted loss or oversampling was applied in the baseline run; this is documented as a primary limitation.
 
 ---
 
@@ -126,6 +127,8 @@ A confidence threshold sweep across `[0.10, 0.90]` (step `0.05`) on the **70-ima
 | **Caries** | **27.7%** | **53.5%** | **0.365** | 54 | 141 | 47 | 101 |
 | **Deep Caries** | **42.9%** | **18.8%** | **0.261** | 6 | 8 | 26 | 32 |
 | **Periapical Lesion** | **33.3%** | **11.1%** | **0.167** | 1 | 2 | 8 | 9 |
+
+- **Macro-F1 arithmetic (unweighted mean over the 4 classes, recomputed from TP/FP/FN):** `impacted = 70/(70+11+5) = 0.81395`, `caries = 108/(108+141+47) = 0.36486`, `deep_caries = 12/(12+8+26) = 0.26087`, `periapical = 2/(2+2+8) = 0.16667`. Mean = `(0.81395 + 0.36486 + 0.26087 + 0.16667) / 4 = 1.60635 / 4 = 0.4016`. The class order in the mean is irrelevant; the table above is sorted by F1, not by class ID.
 
 #### Test Set Confusion Matrix (5×5)
 | Ground Truth \ Predicted | Background (FN) | Impacted Tooth | Caries | Periapical Lesion | Deep Caries |
@@ -221,6 +224,7 @@ Across the 50 held-out test radiographs at $\tau = 0.70$, the detector produced 
 2. **2D Projection Superposition & Caries False Positives:** Panoramic radiographs project 3D craniofacial anatomy onto a 2D plane, causing interproximal contact overlap, cervical burnout, and restoration margin artifacts (`124` background `caries` false positives at $\tau = 0.70`).
 3. **No FDI Tooth Numbering in Current Pipeline:** The detector predicts lesion bounding boxes in original pixel coordinates and sets `"tooth_fdi": null` rather than guessing tooth numbers without a dedicated tooth-enumeration head.
 4. **Heuristic Input Gate Default:** When no binary classifier checkpoint is supplied to `DentalInputGate`, validation relies on deterministic radiographic heuristics (aspect ratio, monochrome channel consistency, dynamic range, and continuous-tone mid-tone histogram constraints) rather than a learned OPG classifier.
+5. **Bounded Resource Use, Not a Production Quota:** Uploads above `1024` MB (`VISCAN_MAX_UPLOAD_MB`) return HTTP `413`; gzipped NIfTI decompression is capped at `2048` MB (`VISCAN_MAX_NIFTI_DECOMPRESSED_MB`) and ZIP archives at `4096` MB uncompressed (`VISCAN_MAX_ZIP_UNCOMPRESSED_MB`), returning HTTP `400` on violation. These are per-request safety limits on a single-worker demo deployment, not a multi-tenant capacity plan.
 
 ---
 

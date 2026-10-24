@@ -192,6 +192,8 @@ curl -X POST "http://localhost:8000/analyze?confidence_threshold=0.70" \
 }
 ```
 
+**Size limits and malformed input.** Uploads above `VISCAN_MAX_UPLOAD_MB` (default `1024` MB) are rejected with HTTP `413` before decoding. Gzipped NIfTI decompression is capped at `VISCAN_MAX_NIFTI_DECOMPRESSED_MB` (default `2048` MB) and ZIP archives at `VISCAN_MAX_ZIP_UNCOMPRESSED_MB` (default `4096` MB), so a decompression bomb returns HTTP `400` with a limit message instead of exhausting memory. Wrong file types, corrupt images/DICOMs, and non-dental inputs return structured `4xx` errors; a valid image with no findings returns an empty `findings` list and the summary "No pathological findings detected at current confidence threshold."
+
 ### 3D CBCT Analysis (`POST /analyze` or `POST /analyze/sample_cbct`)
 
 The service accepts three CBCT input modes and reports which one produced the labels:
@@ -313,7 +315,7 @@ curl -X POST "http://localhost:8000/analyze/sample_cbct?scan=PostDentalSurgery"
 ## 6. Dataset Preparation & Training
 
 ### Prepare Data
-Downloads the official DENTEX (MICCAI 2023) benchmark, creates the deterministic `SEED=42` 3-way split (`635` train / `70` val from `training_data.zip`, and `50` held-out test from `validation_data.zip`), copies images into `images/train`, `images/val`, and `images/test`, and writes COCO JSON annotations (`instances_train.json`, `instances_val.json`, `instances_test.json`):
+Downloads the official DENTEX (MICCAI 2023) benchmark at pinned revision `7b27ccc8e342dcb774f69adc6ca5e6c09fefce93`, creates the deterministic `SEED=42` 3-way split (`635` train / `70` val from `training_data.zip`, and `50` held-out test from `validation_data.zip`), copies images into `images/train`, `images/val`, and `images/test`, and writes COCO JSON annotations (`instances_train.json`, `instances_val.json`, `instances_test.json`). Of DENTEX's 1,005 published images, the 250 challenge-test images have no public annotations and are not downloaded; the working cohort is the 755 labeled images (705 + 50):
 ```bash
 python prepare_data.py data/dentex
 ```

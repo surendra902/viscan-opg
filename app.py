@@ -33,6 +33,9 @@ from imaging import ImageProcessingError, InvalidImageError, UnsupportedDICOMErr
 from input_gate import NonDentalInputError
 
 BASE_DIR = Path(__file__).resolve().parent
+# Hard upload cap. A full CBCT DICOM series ZIP is the largest legitimate payload,
+# so the default is deliberately generous and can be raised for a deployment.
+MAX_UPLOAD_BYTES = int(float(os.getenv("VISCAN_MAX_UPLOAD_MB", "1024")) * 1024 * 1024)
 RESULTS_DIR = BASE_DIR / "results"
 RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 SAMPLES_DIR = BASE_DIR / "samples"
@@ -102,7 +105,15 @@ async def analyze_opg(
     and (for 3D CBCT) 3D coordinates, nerve clearance in mm, and .glb / .stl mesh URLs.
     """
     try:
-        content = await file.read()
+        content = await file.read(MAX_UPLOAD_BYTES + 1)
+        if len(content) > MAX_UPLOAD_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=(
+                    f"Upload exceeds the {MAX_UPLOAD_BYTES // (1024 * 1024)} MB limit. "
+                    "Raise VISCAN_MAX_UPLOAD_MB for larger CBCT series."
+                ),
+            )
         if not content:
             raise HTTPException(status_code=400, detail="Uploaded file is empty.")
 

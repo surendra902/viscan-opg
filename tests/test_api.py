@@ -107,3 +107,14 @@ def test_analyze_empty_file_rejected(client):
         files={"file": ("empty.png", b"", "image/png")},
     )
     assert response.status_code == 400
+
+
+def test_analyze_oversized_upload_returns_413(client, monkeypatch):
+    """Verify an upload above the configured cap is rejected before any model work (HTTP 413)."""
+    monkeypatch.setattr(app_module, "MAX_UPLOAD_BYTES", 1024)
+    response = client.post(
+        "/analyze",
+        files={"file": ("oversized_opg.png", b"\x89PNG\r\n\x1a\n" + b"0" * 4096, "image/png")},
+    )
+    assert response.status_code == 413
+    assert "limit" in response.json()["detail"].lower()

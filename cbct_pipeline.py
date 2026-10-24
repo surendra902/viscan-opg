@@ -43,6 +43,14 @@ SEGMENTATION_SOURCES = {
     "demo_labelmap",
 }
 
+# Decompression / archive safety limits (env-overridable for larger clinical volumes).
+MAX_NIFTI_DECOMPRESSED_BYTES = int(
+    float(os.getenv("VISCAN_MAX_NIFTI_DECOMPRESSED_MB", "2048")) * 1024 * 1024
+)
+MAX_ZIP_UNCOMPRESSED_BYTES = int(
+    float(os.getenv("VISCAN_MAX_ZIP_UNCOMPRESSED_MB", "4096")) * 1024 * 1024
+)
+
 # Demo-only labels. These are never used for an arbitrary upload: the API only applies
 # them when the server itself serves a known sample bundle.
 DEMO_SCAN_PROVENANCE: Dict[str, Dict[str, Any]] = {
@@ -141,6 +149,52 @@ def _is_labelmap(arr: np.ndarray) -> bool:
     return bool(values.min() >= 0 and values.max() <= 5 and values.max() > 0)
 
 
+def _read_zip_member(zf: zipfile.ZipFile, name: str, limit: Optional[int] = None) -> bytes:
+    """
+    Reads one ZIP member with a hard output cap. The declared size is checked first and
+    the actual read is capped as well, so a header that understates a member cannot
+    force an unbounded allocation (zip bomb).
+    """
+    if limit is None:
+        limit = MAX_ZIP_UNCOMPRESSED_BYTES
+    declared = zf.getinfo(name).file_size
+    if declared > limit:
+        raise ImageProcessingError(
+            f"ZIP member '{Path(name).name}' declares {declared} bytes, above the "
+            f"{limit // (1024 * 1024)} MB per-file safety limit."
+        )
+    with zf.open(name) as fh:
+        data = fh.read(limit + 1)
+    if len(data) > limit:
+        raise ImageProcessingError(
+            f"ZIP member '{Path(name).name}' exceeds the {limit // (1024 * 1024)} MB per-file safety limit."
+        )
+    return data
+
+
+def _bounded_gunzip(raw_bytes: bytes, limit: Optional[int] = None) -> bytes:
+    """Decompresses gzip input with a hard output cap instead of an unbounded gzip.decompress."""
+    if limit is None:
+        limit = MAX_NIFTI_DECOMPRESSED_BYTES
+    try:
+        dobj = zlib.decompressobj(16 + zlib.MAX_WBITS)
+        out = dobj.decompress(raw_bytes, limit + 1)
+        if len(out) > limit or dobj.unconsumed_tail:
+            raise ImageProcessingError(
+                f"Decompressed NIfTI exceeds the {limit // (1024 * 1024)} MB safety limit."
+            )
+        tail = dobj.flush()
+        if len(out) + len(tail) > limit:
+            raise ImageProcessingError(
+                f"Decompressed NIfTI exceeds the {limit // (1024 * 1024)} MB safety limit."
+            )
+    except ImageProcessingError:
+        raise
+    except Exception as exc:
+        raise ImageProcessingError(f"Corrupt gzipped NIfTI file: {exc}") from exc
+    return out + tail
+
+
 def _read_declared_provenance(zf: zipfile.ZipFile) -> Optional[Dict[str, Any]]:
     """
     Reads an optional provenance.json from a bundle. It is informational only and is
@@ -149,7 +203,7 @@ def _read_declared_provenance(zf: zipfile.ZipFile) -> Optional[Dict[str, Any]]:
     try:
         if "provenance.json" not in zf.namelist():
             return None
-        raw = json.loads(zf.read("provenance.json").decode("utf-8"))
+        raw = json.loads(_read_zip_member(zf, "provenance.json", limit=1 * 1024 * 1024).decode("utf-8"))
     except Exception:
         return None
     source = raw.get("segmentation_source") if isinstance(raw, dict) else None
@@ -168,10 +222,7 @@ def parse_nifti_bytes(raw_bytes: bytes, is_gzipped: bool = False) -> Tuple[np.nd
     and (sx, sy, sz) physical voxel spacing in mm.
     """
     if is_gzipped or raw_bytes[:2] == b"\x1f\x8b":
-        try:
-            raw_bytes = gzip.decompress(raw_bytes)
-        except Exception as exc:
-            raise ImageProcessingError(f"Corrupt gzipped NIfTI file: {exc}") from exc
+        raw_bytes = _bounded_gunzip(raw_bytes)
 
     if len(raw_bytes) < 352:
         raise ImageProcessingError("File is too small to be a valid NIfTI-1 volume.")
@@ -263,6 +314,13 @@ def _parse_dicom_zip(file_bytes: bytes) -> Tuple[np.ndarray, Optional[np.ndarray
     if not names:
         raise ImageProcessingError("Uploaded ZIP archive is empty.")
 
+    total_uncompressed = sum(i.file_size for i in zf.infolist() if not i.is_dir())
+    if total_uncompressed > MAX_ZIP_UNCOMPRESSED_BYTES:
+        raise ImageProcessingError(
+            f"ZIP archive declares {total_uncompressed / (1024 * 1024):.0f} MB uncompressed, above the "
+            f"{MAX_ZIP_UNCOMPRESSED_BYTES // (1024 * 1024)} MB safety limit."
+        )
+
     declared = _read_declared_provenance(zf)
 
     # Case A: ZIP contains NIfTI (.nii / .nii.gz) files (volume + optional segmentation)
@@ -272,7 +330,7 @@ def _parse_dicom_zip(file_bytes: bytes) -> Tuple[np.ndarray, Optional[np.ndarray
         seg_xyz = None
         spacing_xyz = (0.5, 0.5, 0.5)
         for n in sorted(nii_names, key=lambda x: ("seg" not in Path(x).name.lower(), x)):
-            arr, sp = parse_nifti_bytes(zf.read(n))
+            arr, sp = parse_nifti_bytes(_read_zip_member(zf, n))
             if _is_labelmap(arr):
                 if seg_xyz is None or "seg" in n.lower():
                     seg_xyz = arr.astype(np.uint8)
@@ -343,7 +401,7 @@ def _parse_dicom_zip(file_bytes: bytes) -> Tuple[np.ndarray, Optional[np.ndarray
     slices = []
     for n in dcm_names:
         try:
-            ds = pydicom.dcmread(io.BytesIO(zf.read(n)), force=True)
+            ds = pydicom.dcmread(io.BytesIO(_read_zip_member(zf, n)), force=True)
             if not hasattr(ds, "pixel_array"):
                 continue
             slices.append((*_geometry(ds), ds))
