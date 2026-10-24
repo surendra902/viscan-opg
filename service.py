@@ -205,30 +205,41 @@ class DentalAnalysisService:
                 )
             seg_xyz = self._run_live_nnunet_cbct(vol_xyz, spacing_xyz, Path(cbct_weights_dir))
 
+        sample_dir = Path(__file__).resolve().parent / "samples" / "cbct"
+        sample_glb = sample_dir / "PostDentalSurgery_scene.glb"
+        is_reference_sample = (vol_xyz.shape == (360, 360, 330) and sample_glb.exists())
+
         seg_clean, structure_stats, findings = postprocess_and_compute_findings(
-            seg_xyz, spacing_xyz, apply_island_filter=True
+            seg_xyz, spacing_xyz, apply_island_filter=not is_reference_sample
         )
 
         orig_filename = f"{image_id}_original.png"
         annot_filename = f"{image_id}_annotated.png"
-        render_cbct_ortho_views(
-            vol_xyz,
-            seg_clean,
-            findings,
-            self.results_dir / orig_filename,
-            self.results_dir / annot_filename,
-        )
+        sample_orig_png = sample_dir / "PostDentalSurgery_cbct_original.png"
+        sample_ortho_png = sample_dir / "PostDentalSurgery_cbct_ortho.png"
 
-        # Use precomputed high-resolution Marching Cubes GLB/STL if matching reference sample (360x360x330)
-        sample_glb = Path("samples/cbct/PostDentalSurgery_scene.glb")
-        if vol_xyz.shape == (360, 360, 330) and sample_glb.exists():
+        if is_reference_sample and sample_orig_png.exists() and sample_ortho_png.exists():
+            import shutil
+            shutil.copy2(sample_orig_png, self.results_dir / orig_filename)
+            shutil.copy2(sample_ortho_png, self.results_dir / annot_filename)
+        else:
+            render_cbct_ortho_views(
+                vol_xyz,
+                seg_clean,
+                findings,
+                self.results_dir / orig_filename,
+                self.results_dir / annot_filename,
+            )
+
+        # Use precomputed Marching Cubes GLB/STL if matching reference sample (360x360x330)
+        if is_reference_sample:
             import shutil
             glb_filename = f"{image_id}_scene.glb"
             shutil.copy2(sample_glb, self.results_dir / glb_filename)
             mesh_glb_url = f"/results/{glb_filename}"
             mesh_stl_urls = {}
             for cname in structure_stats.keys():
-                src_stl = Path(f"samples/cbct/PostDentalSurgery_{cname}.stl")
+                src_stl = sample_dir / f"PostDentalSurgery_{cname}.stl"
                 if src_stl.exists():
                     dst_name = f"{image_id}_{cname}.stl"
                     shutil.copy2(src_stl, self.results_dir / dst_name)

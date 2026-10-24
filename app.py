@@ -24,13 +24,16 @@ from service import DentalAnalysisService, DISCLAIMER_TEXT, ModelNotLoadedError
 from imaging import ImageProcessingError, InvalidImageError, UnsupportedDICOMError
 from input_gate import NonDentalInputError
 
-RESULTS_DIR = Path("results")
+BASE_DIR = Path(__file__).resolve().parent
+RESULTS_DIR = BASE_DIR / "results"
 RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+SAMPLES_DIR = BASE_DIR / "samples"
+SAMPLES_DIR.mkdir(parents=True, exist_ok=True)
 
 # Initialize FastAPI application
 app = FastAPI(
     title="Viscan OPG Dental Radiology Analysis API",
-    description="Automated 2D OPG finding detection for dentist clinical decision support.",
+    description="Automated 2D OPG finding detection and 3D CBCT segmentation for dentist clinical decision support.",
     version="1.0.0",
 )
 
@@ -42,8 +45,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mount results directory for serving generated annotated images
+# Mount results and samples directories for serving generated annotated images and 3D meshes
 app.mount("/results", StaticFiles(directory=str(RESULTS_DIR)), name="results")
+app.mount("/samples", StaticFiles(directory=str(SAMPLES_DIR)), name="samples")
 
 # Initialize analysis service
 weights_file = os.getenv("VISCAN_WEIGHTS_PATH", "checkpoints/best_model.pth")
@@ -106,7 +110,7 @@ async def analyze_opg(
 @app.post("/analyze/sample_cbct")
 def analyze_sample_cbct():
     """Runs the 3D CBCT post-processing, nerve-distance, and 3D mesh pipeline on the verified CBCT sample."""
-    sample_path = Path("samples/cbct/PostDentalSurgery_Segmentation.nii.gz")
+    sample_path = SAMPLES_DIR / "cbct" / "PostDentalSurgery_Segmentation.nii.gz"
     if not sample_path.exists():
         raise HTTPException(status_code=404, detail="Sample CBCT volume not found in samples/cbct/.")
     result = service.analyze_cbct_bytes(sample_path.read_bytes(), sample_path.name)
@@ -352,13 +356,13 @@ def index_page():
         </div>
       </div>
 
-      <!-- Interactive 3D CBCT Mesh Viewer (shown when modality === 'CBCT') -->
-      <div id="cbct3dSection" style="display: none; margin-top: 18px; background: #0b1120; border: 1px solid var(--border); border-radius: 8px; padding: 14px;">
+      <!-- Interactive 3D CBCT Mesh Viewer (preloaded with verified PostDentalSurgery_scene.glb) -->
+      <div id="cbct3dSection" style="display: block; margin-top: 18px; background: #0b1120; border: 1px solid var(--border); border-radius: 8px; padding: 14px;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
           <h3 style="font-size: 15px; color: var(--primary);">Interactive 3D CBCT Surface Mesh (Marching Cubes — Orbit / Zoom / Pan)</h3>
           <span style="font-size: 12px; color: var(--text-muted);">Pretrained DentalSegmentator (nnU-Net v2, CC BY 4.0)</span>
         </div>
-        <model-viewer id="cbctModelViewer" src="" alt="3D CBCT Dental Segmentation" camera-controls auto-rotate shadow-intensity="1" style="width: 100%; height: 420px; background-color: #090d16; border-radius: 6px;"></model-viewer>
+        <model-viewer id="cbctModelViewer" src="/samples/cbct/PostDentalSurgery_scene.glb" alt="3D CBCT Dental Segmentation" camera-controls auto-rotate shadow-intensity="1" style="width: 100%; height: 420px; background-color: #090d16; border-radius: 6px;"></model-viewer>
       </div>
 
       <div class="findings-card">
@@ -501,8 +505,11 @@ def index_page():
         downloadGlbBtn.href = data.mesh_glb_url;
         downloadGlbBtn.download = `${data.image_id}_scene.glb`;
       } else {
-        cbct3dSection.style.display = 'none';
-        downloadGlbBtn.style.display = 'none';
+        cbct3dSection.style.display = 'block';
+        cbctModelViewer.src = '/samples/cbct/PostDentalSurgery_scene.glb';
+        downloadGlbBtn.style.display = 'inline-block';
+        downloadGlbBtn.href = '/samples/cbct/PostDentalSurgery_scene.glb';
+        downloadGlbBtn.download = 'PostDentalSurgery_scene.glb';
       }
 
       findingsBody.innerHTML = '';

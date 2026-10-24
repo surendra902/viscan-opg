@@ -276,7 +276,7 @@ def postprocess_and_compute_findings(
             if not np.any(mask):
                 continue
             labeled, num_feats = cc_label(mask)
-            if num_feats > 0:
+            if num_feats > 1:
                 counts = np.bincount(labeled.ravel())
                 small_ids = np.where((counts < min_voxels) & (np.arange(len(counts)) > 0))[0]
                 if len(small_ids) > 0:
@@ -287,10 +287,12 @@ def postprocess_and_compute_findings(
         mask = seg_clean == cid
         v_count = int(mask.sum())
         if v_count > 0:
-            coords = np.argwhere(mask)
+            xs = np.where(mask.any(axis=(1, 2)))[0]
+            ys = np.where(mask.any(axis=(0, 2)))[0]
+            zs = np.where(mask.any(axis=(0, 1)))[0]
             bbox_vox = [
-                int(coords[:, 0].min()), int(coords[:, 1].min()), int(coords[:, 2].min()),
-                int(coords[:, 0].max()), int(coords[:, 1].max()), int(coords[:, 2].max()),
+                int(xs[0]), int(ys[0]), int(zs[0]),
+                int(xs[-1]), int(ys[-1]), int(zs[-1]),
             ]
         else:
             bbox_vox = [0, 0, 0, 0, 0, 0]
@@ -301,21 +303,31 @@ def postprocess_and_compute_findings(
             "bbox_3d_voxel": bbox_vox,
         }
 
-    # Surface extraction for Lower Teeth (4) and Mandibular Canal (5)
-    teeth_mask = seg_clean == 4
-    canal_mask = seg_clean == 5
+    # Surface extraction for Lower Teeth (4) and Mandibular Canal (5) using tight ROI crops for speed
+    t_stat = structure_stats.get("lower_teeth", {})
+    c_stat = structure_stats.get("mandibular_canal", {})
     findings: List[Dict[str, Any]] = []
 
-    if np.any(teeth_mask) and np.any(canal_mask):
-        teeth_surf = teeth_mask & ~binary_erosion(teeth_mask)
-        canal_surf = canal_mask & ~binary_erosion(canal_mask)
-        if not np.any(teeth_surf):
-            teeth_surf = teeth_mask
-        if not np.any(canal_surf):
-            canal_surf = canal_mask
+    if t_stat.get("voxel_count", 0) > 0 and c_stat.get("voxel_count", 0) > 0:
+        tb = t_stat["bbox_3d_voxel"]
+        cb = c_stat["bbox_3d_voxel"]
+        tx0, ty0, tz0 = max(0, tb[0] - 1), max(0, tb[1] - 1), max(0, tb[2] - 1)
+        tx1, ty1, tz1 = min(nx, tb[3] + 2), min(ny, tb[4] + 2), min(nz, tb[5] + 2)
+        cx0, cy0, cz0 = max(0, cb[0] - 1), max(0, cb[1] - 1), max(0, cb[2] - 1)
+        cx1, cy1, cz1 = min(nx, cb[3] + 2), min(ny, cb[4] + 2), min(nz, cb[5] + 2)
 
-        teeth_vox = np.argwhere(teeth_surf)
-        canal_vox = np.argwhere(canal_surf)
+        t_crop = seg_clean[tx0:tx1, ty0:ty1, tz0:tz1] == 4
+        c_crop = seg_clean[cx0:cx1, cy0:cy1, cz0:cz1] == 5
+
+        t_surf_crop = t_crop & ~binary_erosion(t_crop)
+        c_surf_crop = c_crop & ~binary_erosion(c_crop)
+        if not np.any(t_surf_crop):
+            t_surf_crop = t_crop
+        if not np.any(c_surf_crop):
+            c_surf_crop = c_crop
+
+        teeth_vox = np.argwhere(t_surf_crop) + np.array([tx0, ty0, tz0])
+        canal_vox = np.argwhere(c_surf_crop) + np.array([cx0, cy0, cz0])
 
         mid_x = nx / 2.0
         spacing_arr = np.array([sx, sy, sz], dtype=np.float64)
