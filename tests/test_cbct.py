@@ -122,28 +122,40 @@ def test_cbct_analyze_endpoint_returns_3d_schema():
     assert "disclaimer" in data
 
 
-def test_different_inputs_produce_distinct_3d_glb_meshes(tmp_path: Path):
-    """Verify different CBCT volumes and different 2D OPG images produce distinct 3D .glb meshes."""
-    from PIL import Image
-    from cbct_pipeline import export_opg_3d_relief_glb
+def _make_bundle(vol_seg: np.ndarray, hu_seed: int, spacing=(0.5, 0.5, 0.5)) -> bytes:
+    """Zip bundle = grayscale volume (random HU, outside 0..5) + label map, like the real demo bundles."""
+    import io, zipfile
+    rng = np.random.default_rng(hu_seed)
+    hu = rng.integers(-500, 1800, size=vol_seg.shape, dtype=np.int16)
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr("Scan_Volume.nii.gz", write_nifti_gz_bytes(hu, spacing))
+        zf.writestr("Scan_Segmentation.nii.gz", write_nifti_gz_bytes(vol_seg.astype(np.uint8), spacing))
+    return buf.getvalue()
 
-    vol1, spacing = _build_synthetic_cbct_labelmap()
-    vol2 = vol1.copy()
-    vol2[20:, :, :] = 0  # Right hemimandible only
 
-    glb1_url, _ = export_cbct_meshes(vol1, spacing, tmp_path, "cbct_1")
-    glb2_url, _ = export_cbct_meshes(vol2, spacing, tmp_path, "cbct_2")
-    b1 = (tmp_path / Path(glb1_url).name).read_bytes()
-    b2 = (tmp_path / Path(glb2_url).name).read_bytes()
-    assert b1 != b2
+def test_different_scans_produce_different_slices_models_and_findings(tmp_path: Path):
+    """Regression: two different scans must never yield identical slices, 3D models or measurements."""
+    import hashlib
+    from service import DentalAnalysisService
 
-    rng1 = np.random.default_rng(1)
-    rng2 = np.random.default_rng(2)
-    img1 = Image.fromarray(rng1.integers(20, 220, size=(200, 400, 3), dtype=np.uint8))
-    img2 = Image.fromarray(rng2.integers(20, 220, size=(200, 400, 3), dtype=np.uint8))
-    opg1_url = export_opg_3d_relief_glb(img1, [{"class": "caries", "bbox": [30, 40, 80, 90]}], tmp_path, "opg_1")
-    opg2_url = export_opg_3d_relief_glb(img2, [{"class": "impacted_tooth", "bbox": [120, 50, 190, 140]}], tmp_path, "opg_2")
-    ob1 = (tmp_path / Path(opg1_url).name).read_bytes()
-    ob2 = (tmp_path / Path(opg2_url).name).read_bytes()
-    assert ob1 != ob2
-    assert ob1 != b1
+    seg_a, _ = _build_synthetic_cbct_labelmap()
+    seg_b = seg_a.copy()
+    seg_b[24:34, 12:24, 14:22] = 0  # remove left lower teeth
+    seg_b[27:30, 15:19, 8:13] = 0   # and left canal -> only right-side finding remains
+
+    svc = DentalAnalysisService(weights_path=None, results_dir=str(tmp_path))
+    ra = svc.analyze_cbct_bytes(_make_bundle(seg_a, 1), "a_bundle.zip")
+    rb = svc.analyze_cbct_bytes(_make_bundle(seg_b, 2), "b_bundle.zip")
+
+    def sha(url):
+        return hashlib.sha256((tmp_path / Path(url).name).read_bytes()).hexdigest()
+
+    for key in ("original_image_url", "annotated_image_url", "mesh_glb_url"):
+        assert sha(ra[key]) != sha(rb[key]), key
+    assert len(ra["findings"]) == 2 and len(rb["findings"]) == 1
+    # summary is derived from each scan's own findings
+    for r in (ra, rb):
+        for f in r["findings"]:
+            assert f"{f['min_distance_mm']:.2f} mm" in r["summary"]
+    assert ra["summary"] != rb["summary"]

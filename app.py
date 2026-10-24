@@ -107,21 +107,23 @@ async def analyze_opg(
         raise HTTPException(status_code=500, detail=f"Internal analysis failure: {str(e)}")
 
 
+def _scan_bundles():
+    """Real, distinct demo CBCT scans: samples/cbct/<Scan>_bundle.zip (volume + DentalSegmentator label map)."""
+    return {p.name[: -len("_bundle.zip")]: p for p in sorted((SAMPLES_DIR / "cbct").glob("*_bundle.zip"))}
+
+
+@app.get("/analyze/sample_cbct/scans")
+def list_sample_cbct_scans():
+    return {"scans": list(_scan_bundles().keys())}
+
+
 @app.post("/analyze/sample_cbct")
-def analyze_sample_cbct(view: str = Query("jaws", description="CBCT preset view: full, jaws, or surgical")):
-    """Runs the 3D CBCT post-processing, nerve-distance, and 3D mesh pipeline on the selected verified CBCT view."""
-    view_map = {
-        "full": "PostDentalSurgery_Segmentation.nii.gz",
-        "jaws": "Jaws_Teeth_Canal_CBCT.nii.gz",
-        "surgical": "Surgical_Nerve_Clearance_CBCT.nii.gz",
-    }
-    fname = view_map.get(view, "Jaws_Teeth_Canal_CBCT.nii.gz")
-    sample_path = SAMPLES_DIR / "cbct" / fname
-    if not sample_path.exists():
-        sample_path = SAMPLES_DIR / "cbct" / "PostDentalSurgery_Segmentation.nii.gz"
-    if not sample_path.exists():
-        raise HTTPException(status_code=404, detail="Sample CBCT volume not found in samples/cbct/.")
-    result = service.analyze_cbct_bytes(sample_path.read_bytes(), sample_path.name)
+def analyze_sample_cbct(scan: str = Query(..., description="Scan name from GET /analyze/sample_cbct/scans")):
+    """Runs the full 3D CBCT pipeline on one verified demo scan; slices, findings and meshes come from that scan only."""
+    bundles = _scan_bundles()
+    if scan not in bundles:
+        raise HTTPException(status_code=404, detail=f"Unknown scan '{scan}'. Available: {list(bundles)}")
+    result = service.analyze_cbct_bytes(bundles[scan].read_bytes(), bundles[scan].name)
     return JSONResponse(status_code=200, content=result)
 
 
@@ -368,11 +370,7 @@ def index_page():
       <div id="cbct3dSection" style="display: none; margin-top: 18px; background: #0b1120; border: 1px solid var(--border); border-radius: 8px; padding: 14px;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
           <h3 style="font-size: 15px; color: var(--primary);">Interactive 3D CBCT Anatomical Mesh (3D Slicer DentalSegmentator — Orbit / Zoom / Pan)</h3>
-          <div style="display: flex; gap: 6px;">
-            <button onclick="loadSampleCbct('full')" style="padding: 4px 10px; font-size: 12px; border-radius: 4px; border: 1px solid var(--border); background: #1e293b; color: #f8fafc; cursor: pointer;">Full Skull</button>
-            <button onclick="loadSampleCbct('jaws')" style="padding: 4px 10px; font-size: 12px; border-radius: 4px; border: 1px solid var(--primary); background: #0284c7; color: #fff; cursor: pointer;">Jaws + Teeth + Canal</button>
-            <button onclick="loadSampleCbct('surgical')" style="padding: 4px 10px; font-size: 12px; border-radius: 4px; border: 1px solid var(--border); background: #1e293b; color: #f8fafc; cursor: pointer;">Teeth Roots + Canal (0.71mm)</button>
-          </div>
+          <select id="scanSelect" onchange="loadSampleCbct(this.value)" style="padding: 4px 10px; font-size: 12px; border-radius: 4px; border: 1px solid var(--border); background: #1e293b; color: #f8fafc;"></select>
         </div>
         <model-viewer id="cbctModelViewer" src="" alt="3D CBCT Dental Segmentation" camera-controls auto-rotate shadow-intensity="0.8" style="width: 100%; height: 440px; background-color: #f8fafc; border-radius: 6px;"></model-viewer>
       </div>
@@ -457,16 +455,18 @@ def index_page():
       }
     };
 
-    async function loadSampleCbct(viewMode = 'jaws') {
+    async function loadSampleCbct(scanName) {
+      if (!scanName) return;
       sampleCbctBtn.disabled = true;
-      showStatus(`Running 3D CBCT post-processing & Slicer mesh pipeline (${viewMode} view)...`, true, false);
+      showStatus(`Running 3D CBCT pipeline on ${scanName}...`, true, false);
       try {
-        const resp = await fetch(`/analyze/sample_cbct?view=${viewMode}`, { method: 'POST' });
+        const resp = await fetch(`/analyze/sample_cbct?scan=${encodeURIComponent(scanName)}`, { method: 'POST' });
         const data = await resp.json();
         if (!resp.ok) throw new Error(data.detail || 'Sample CBCT analysis failed.');
         latestResult = data;
         displayResults(data);
-        showStatus(`3D CBCT analysis complete in ${data.inference_ms}ms.`, true, false);
+        document.getElementById('scanSelect').value = scanName;
+        showStatus(`3D CBCT analysis of ${scanName} complete in ${data.inference_ms}ms.`, true, false);
       } catch (err) {
         showStatus(err.message, true, true);
       } finally {
@@ -474,7 +474,13 @@ def index_page():
       }
     }
 
-    sampleCbctBtn.onclick = () => loadSampleCbct('jaws');
+    fetch('/analyze/sample_cbct/scans').then(r => r.json()).then(d => {
+      const sel = document.getElementById('scanSelect');
+      sel.innerHTML = '';
+      (d.scans || []).forEach(n => { const o = document.createElement('option'); o.value = n; o.textContent = n; sel.appendChild(o); });
+    });
+
+    sampleCbctBtn.onclick = () => loadSampleCbct(document.getElementById('scanSelect').value);
 
     analyzeBtn.onclick = async () => {
       if (!selectedFile) return;

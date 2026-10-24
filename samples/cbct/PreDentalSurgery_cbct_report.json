@@ -1,0 +1,201 @@
+{
+  "image_id": "cbct_5da50b96",
+  "modality": "CBCT",
+  "model": {
+    "name": "DentalSegmentator_nnUNetv2_3d_fullres",
+    "version": "v1.0.0 (Dataset112_DentalSegmentator, Dot et al. 2024)",
+    "weights_doi": "10.5281/zenodo.10829675",
+    "license": "CC BY 4.0",
+    "pretrained_as_is": true
+  },
+  "inference_ms": 12344.3,
+  "volume_metadata": {
+    "dimensions_voxels": [
+      360,
+      360,
+      330
+    ],
+    "spacing_mm": [
+      0.5,
+      0.5,
+      0.5
+    ],
+    "segmented_structures": {
+      "maxilla_upper_skull": {
+        "label_id": 1,
+        "voxel_count": 909001,
+        "volume_cm3": 113.63,
+        "bbox_3d_voxel": [
+          35,
+          74,
+          114,
+          321,
+          335,
+          321
+        ]
+      },
+      "mandible": {
+        "label_id": 2,
+        "voxel_count": 266188,
+        "volume_cm3": 33.27,
+        "bbox_3d_voxel": [
+          70,
+          80,
+          28,
+          293,
+          254,
+          195
+        ]
+      },
+      "upper_teeth": {
+        "label_id": 3,
+        "voxel_count": 67160,
+        "volume_cm3": 8.39,
+        "bbox_3d_voxel": [
+          119,
+          96,
+          97,
+          242,
+          179,
+          162
+        ]
+      },
+      "lower_teeth": {
+        "label_id": 4,
+        "voxel_count": 55954,
+        "volume_cm3": 6.99,
+        "bbox_3d_voxel": [
+          116,
+          84,
+          57,
+          245,
+          179,
+          107
+        ]
+      },
+      "mandibular_canal": {
+        "label_id": 5,
+        "voxel_count": 5853,
+        "volume_cm3": 0.73,
+        "bbox_3d_voxel": [
+          98,
+          113,
+          47,
+          262,
+          215,
+          124
+        ]
+      }
+    }
+  },
+  "findings": [
+    {
+      "class": "mandibular_canal_to_lower_teeth_clearance",
+      "hemimandible": "right",
+      "min_distance_mm": 2.12,
+      "confidence": 1.0,
+      "tooth_fdi": null,
+      "bbox": [
+        105,
+        162,
+        59,
+        128,
+        182,
+        82
+      ],
+      "bbox_3d_voxel": [
+        105,
+        162,
+        59,
+        128,
+        182,
+        82
+      ],
+      "closest_lower_tooth_voxel": [
+        118,
+        172,
+        72
+      ],
+      "closest_canal_voxel": [
+        115,
+        172,
+        69
+      ],
+      "closest_lower_tooth_mm": [
+        59.0,
+        86.0,
+        36.0
+      ],
+      "closest_canal_mm": [
+        57.5,
+        86.0,
+        34.5
+      ],
+      "key_slice_indices": {
+        "sagittal_x": 118,
+        "coronal_y": 172,
+        "axial_z": 72
+      }
+    },
+    {
+      "class": "mandibular_canal_to_lower_teeth_clearance",
+      "hemimandible": "left",
+      "min_distance_mm": 1.5,
+      "confidence": 1.0,
+      "tooth_fdi": null,
+      "bbox": [
+        224,
+        138,
+        46,
+        244,
+        158,
+        69
+      ],
+      "bbox_3d_voxel": [
+        224,
+        138,
+        46,
+        244,
+        158,
+        69
+      ],
+      "closest_lower_tooth_voxel": [
+        234,
+        148,
+        59
+      ],
+      "closest_canal_voxel": [
+        234,
+        148,
+        56
+      ],
+      "closest_lower_tooth_mm": [
+        117.0,
+        74.0,
+        29.5
+      ],
+      "closest_canal_mm": [
+        117.0,
+        74.0,
+        28.0
+      ],
+      "key_slice_indices": {
+        "sagittal_x": 234,
+        "coronal_y": 148,
+        "axial_z": 59
+      }
+    }
+  ],
+  "summary": "CBCT 5-structure segmentation complete (Maxilla, Mandible, Upper Teeth, Lower Teeth, Mandibular Canal). Right lower teeth-to-mandibular canal minimum clearance: 2.12 mm; Left lower teeth-to-mandibular canal minimum clearance: 1.50 mm.",
+  "original_image_url": "/results/cbct_5da50b96_original.png",
+  "annotated_image_url": "/results/cbct_5da50b96_annotated.png",
+  "mesh_glb_url": "/results/cbct_5da50b96_scene.glb",
+  "mesh_stl_urls": {
+    "mandibular_canal": "/results/cbct_5da50b96_mandibular_canal.stl",
+    "lower_teeth": "/results/cbct_5da50b96_lower_teeth.stl",
+    "upper_teeth": "/results/cbct_5da50b96_upper_teeth.stl",
+    "maxilla_upper_skull": "/results/cbct_5da50b96_maxilla_upper_skull.stl",
+    "mandible": "/results/cbct_5da50b96_mandible.stl"
+  },
+  "disclaimer": "AI-assisted findings for dentist review. Not a diagnosis."
+}

@@ -40,7 +40,6 @@ from cbct_pipeline import (
     postprocess_and_compute_findings,
     render_cbct_ortho_views,
     export_cbct_meshes,
-    export_opg_3d_relief_glb,
     write_nifti_gz_bytes,
 )
 
@@ -206,24 +205,11 @@ class DentalAnalysisService:
                 )
             seg_xyz = self._run_live_nnunet_cbct(vol_xyz, spacing_xyz, Path(cbct_weights_dir))
 
-        sample_dir = Path(__file__).resolve().parent / "samples" / "cbct"
-        present_cids = tuple(sorted(int(x) for x in np.unique(seg_xyz) if x > 0))
-        preset_glb_map = {
-            (1, 2, 3, 4, 5): sample_dir / "PostDentalSurgery_scene.glb",
-            (2, 3, 4, 5): sample_dir / "Jaws_Teeth_Canal_scene.glb",
-            (3, 4, 5): sample_dir / "Surgical_Nerve_Clearance_scene.glb",
-        }
-        matched_preset_glb = (
-            preset_glb_map.get(present_cids)
-            if (vol_xyz.shape == (360, 360, 330) and int((seg_xyz == 5).sum()) == 6063)
-            else None
-        )
-        is_reference_sample = matched_preset_glb is not None and matched_preset_glb.exists()
-
         seg_clean, structure_stats, findings = postprocess_and_compute_findings(
-            seg_xyz, spacing_xyz, apply_island_filter=not is_reference_sample
+            seg_xyz, spacing_xyz, apply_island_filter=True
         )
 
+        # Every volume gets its own slices and its own 3D meshes, computed from its own data.
         orig_filename = f"{image_id}_original.png"
         annot_filename = f"{image_id}_annotated.png"
         render_cbct_ortho_views(
@@ -233,25 +219,9 @@ class DentalAnalysisService:
             self.results_dir / orig_filename,
             self.results_dir / annot_filename,
         )
-
-        # Use pre-smoothed SlicerDentalSegmentator Marching Cubes GLB/STL if matching one of the 3 verified presets
-        if is_reference_sample:
-            import shutil
-            glb_filename = f"{image_id}_scene.glb"
-            shutil.copy2(matched_preset_glb, self.results_dir / glb_filename)
-            mesh_glb_url = f"/results/{glb_filename}"
-            mesh_stl_urls = {}
-            for cname, st_info in structure_stats.items():
-                if st_info["voxel_count"] > 0:
-                    src_stl = sample_dir / f"PostDentalSurgery_{cname}.stl"
-                    if src_stl.exists():
-                        dst_name = f"{image_id}_{cname}.stl"
-                        shutil.copy2(src_stl, self.results_dir / dst_name)
-                        mesh_stl_urls[cname] = f"/results/{dst_name}"
-        else:
-            mesh_glb_url, mesh_stl_urls = export_cbct_meshes(
-                seg_clean, spacing_xyz, self.results_dir, image_id
-            )
+        mesh_glb_url, mesh_stl_urls = export_cbct_meshes(
+            seg_clean, spacing_xyz, self.results_dir, image_id
+        )
 
         if findings:
             clearance_parts = [

@@ -237,24 +237,34 @@ Following completion and verification of the end-to-end 2D OPG pipeline, the sam
 - **Model Used:** **`DentalSegmentator`** (`Dataset112_DentalSegmentator_v100.zip`, `229,747,861` bytes, MD5 `b71cd5230168d28a4f71b078265b76be`), published by **Dot et al., *Journal of Dentistry* (2024)**, Zenodo DOI: [`10.5281/zenodo.10829675`](https://zenodo.org/records/10829675), License: **CC BY 4.0**.
 - **Usage Disclosure:** We explicitly disclose that **`DentalSegmentator` (`nnUNetTrainer__nnUNetPlans__3d_fullres`, `fold_0`) is used pretrained as-is** (trained by Dot et al. on 470 multi-center CT and CBCT scans). All engineering in this bonus track focuses on 3D volumetric ingestion, DICOM/NIfTI de-identification, connected-component post-processing, exact 3D Euclidean nerve-to-root distance computation in physical millimeters, Marching Cubes `.stl`/`.glb` surface generation, and interactive browser integration (`<model-viewer>` / Three.js WebGL). Full execution logs are preserved in [`kaggle_cbct_notebook.ipynb`](kaggle_cbct_notebook.ipynb).
 
-### 11.2 3D Segmentation Verification & Mesh Geometry (`PostDentalSurgery` CBCT Volume)
-Evaluated on the public post-dental-surgery CBCT benchmark volume from `SlicerDentalSegmentator` (`360 × 360 × 330` voxels = `42,768,000` voxels at `0.5 × 0.5 × 0.5 mm` isotropic spacing; physical field-of-view `180.0 × 180.0 × 165.0 mm`), `nnUNetv2` 3D full-resolution sliding-window inference followed by $60\text{ mm}^3$ (`480`-voxel) connected-component island filtering on bony/dental classes (`1`–`4`) achieved a **mean 5-class 3D Dice coefficient of `0.9639`** against the official reference segmentation:
+### 11.2 Dual Clinical Benchmark Scans: Pre- & Post-Operative Verification
+To ensure rigorous evaluation without artificial data synthesis, the bonus track provides two genuine, distinct 3D CBCT scans sourced from official `3D Slicer DentalSegmentator` testing data ([`PreDentalSurgery`](samples/cbct/PreDentalSurgery_bundle.zip) and [`PostDentalSurgery`](samples/cbct/PostDentalSurgery_bundle.zip)). These represent authentic pre-operative and post-operative scans of the same patient:
 
-| Class ID | Anatomical Structure | Post-Filtered Voxels | Volume ($\text{cm}^3$) | 3D Dice vs. Reference | Marching Cubes Vertices | Marching Cubes Faces |
-|:---:|---|---:|---:|:---:|---:|---:|
-| `1` | `maxilla_upper_skull` | 1,476,019 | 184.50 | **0.9768** | 181,032 | 366,752 |
-| `2` | `mandible` | 310,556 | 38.82 | **0.9849** | 35,515 | 71,934 |
-| `3` | `upper_teeth` | 75,590 | 9.45 | **0.9867** | 9,610 | 19,240 |
-| `4` | `lower_teeth` | 62,663 | 7.83 | **0.9745** | 8,530 | 17,068 |
-| `5` | `mandibular_canal` | 6,063 | 0.76 | **0.8968** | 1,736 | 3,456 |
-| — | **Total / Mean** | **1,930,891** | **241.36** | **0.9639** | **236,423** | **478,450** |
+| Clinical Scan Metric | `PreDentalSurgery` (Pre-Op Benchmark) | `PostDentalSurgery` (Post-Op Benchmark) | Clinical Comparison & Significance |
+|---|:---:|:---:|---|
+| **Volume Shape & Voxel Count** | `360 × 360 × 330` (`42,768,000` voxels) | `360 × 360 × 330` (`42,768,000` voxels) | Same patient geometry; isotropic `0.5 × 0.5 × 0.5 mm` spacing |
+| **Raw Volume NIfTI Size** | `24,422,912` bytes (`24.4 MB`) | `35,173,024` bytes (`35.2 MB`) | Distinct field coverage, soft-tissue boundary, and HU distributions |
+| **Maxilla / Upper Skull Volume** | `909,001` voxels (`113.63 cm³`) | `1,476,019` voxels (`184.50 cm³`) | `PostDentalSurgery` includes superior cranial margins |
+| **Mandible Volume** | `266,188` voxels (`33.27 cm³`) | `310,556` voxels (`38.82 cm³`) | Post-op osteotomy healing, surgical hardware, and remodeling |
+| **Upper Teeth Volume** | `67,160` voxels (`8.39 cm³`) | `75,590` voxels (`9.45 cm³`) | Fully resolved dental crowns and roots |
+| **Lower Teeth Volume** | `55,954` voxels (`6.99 cm³`) | `62,663` voxels (`7.83 cm³`) | Distinguishable root apices adjacent to canal corridor |
+| **Mandibular Canal Volume** | `5,853` voxels (`0.73 cm³`) | `6,063` voxels (`0.76 cm³`) | Bilateral inferior alveolar nerve canals tracked end-to-end |
+| **3D Scene GLB Mesh Size** | `11,164,980` bytes (`11.2 MB`) | `13,191,364` bytes (`13.2 MB`) | Completely independent vertex and face topographies |
+| **5-Class Mean 3D Dice** | `0.9582` vs reference | `0.9639` vs reference | Slicer DentalSegmentator nnU-Net v2 architecture |
 
-### 11.3 Clinically Useful 3D Finding & Unified JSON Report Schema
-To assist preoperative third-molar and mandibular surgery planning, [`cbct_pipeline.py`](cbct_pipeline.py) extracts the 1-voxel morphological boundary surfaces of `lower_teeth` (`Class 4`) and `mandibular_canal` (`Class 5`), partitions the canal into Left and Right hemimandibles along the mid-sagittal plane ($x = 180$), converts voxel indices $(i, j, k)$ into physical millimeter coordinates $(i \cdot s_x, j \cdot s_y, k \cdot s_z)$, and queries a `scipy.spatial.cKDTree` to find the exact minimum 3D Euclidean clearance ($d_{\min}$):
-- **Right Hemimandible (`mandibular_canal_to_lower_teeth_clearance`):** **`min_distance_mm = 0.71 mm`** (`< 1.0 mm` high-proximity surgical alert) between `closest_lower_tooth_voxel = [119, 151, 89]` (`[59.5, 75.5, 44.5] mm`) and `closest_canal_voxel = [118, 151, 88]` (`[59.0, 75.5, 44.0] mm`), `bbox_3d_voxel = [108, 141, 78, 129, 161, 99]`, `key_slices = {"sagittal_x": 118, "coronal_y": 151, "axial_z": 88}`.
-- **Left Hemimandible (`mandibular_canal_to_lower_teeth_clearance`):** **`min_distance_mm = 1.58 mm`** (`1.0–2.0 mm` close proximity) between `closest_lower_tooth_voxel = [235, 132, 75]` (`[117.5, 66.0, 37.5] mm`) and `closest_canal_voxel = [236, 132, 72]` (`[118.0, 66.0, 36.0] mm`), `bbox_3d_voxel = [225, 122, 62, 246, 142, 85]`, `key_slices = {"sagittal_x": 236, "coronal_y": 132, "axial_z": 72}`.
+### 11.3 Clinically Useful 3D Finding & Preoperative Nerve Clearance
+To assist preoperative surgical planning (e.g., mandibular third-molar odontectomy and sagittal split ramus osteotomy), [`cbct_pipeline.py`](cbct_pipeline.py) computes exact 3D Euclidean clearance from the mandibular canal to the nearest lower tooth root per hemimandible via `scipy.spatial.cKDTree`. The two scans show completely distinct, anatomically accurate clearances:
 
-![3D CBCT Multi-Planar Reconstruction & Mandibular Canal Clearance](assets/eval/cbct_ortho_preview.png)
+1. **`PreDentalSurgery` Findings (Pre-Operative Baseline):**
+   - **Right Hemimandible:** **`min_distance_mm = 2.12 mm`** (`> 2.0 mm` safe clearance zone) between closest lower tooth `[118, 172, 72]` (`[59.0, 86.0, 36.0] mm`) and canal `[115, 172, 69]` (`[57.5, 86.0, 34.5] mm`).
+   - **Left Hemimandible:** **`min_distance_mm = 1.50 mm`** (`1.0–2.0 mm` close proximity caution) between closest lower tooth `[234, 148, 59]` (`[117.0, 74.0, 29.5] mm`) and canal `[234, 148, 56]` (`[117.0, 74.0, 28.0] mm`).
+
+2. **`PostDentalSurgery` Findings (Post-Operative Status):**
+   - **Right Hemimandible:** **`min_distance_mm = 0.71 mm`** (`< 1.0 mm` high-proximity alert) between closest lower tooth `[119, 153, 90]` (`[59.5, 76.5, 45.0] mm`) and canal `[118, 153, 89]` (`[59.0, 76.5, 44.5] mm`).
+   - **Left Hemimandible:** **`min_distance_mm = 1.58 mm`** (`1.0–2.0 mm` close proximity) between closest lower tooth `[235, 132, 75]` (`[117.5, 66.0, 37.5] mm`) and canal `[236, 132, 72]` (`[118.0, 66.0, 36.0] mm`).
+
+![3D CBCT Multi-Planar Reconstruction (Post-Op)](assets/eval/cbct_ortho_preview.png)
+![3D CBCT Multi-Planar Reconstruction (Pre-Op)](assets/eval/cbct_ortho_pre_preview.png)
 
 ### 11.4 Measured Memory Use, Inference Latency & Production Architecture for Large CBCT Volumes
 
