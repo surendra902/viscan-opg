@@ -4,10 +4,16 @@ and 3D Mesh (.stl / .glb) + Multi-Planar Orthogonal Slice Exporter.
 
 Model Provenance:
 - Pretrained Model: DentalSegmentator (Dataset112_DentalSegmentator_v100, nnUNetv2 3d_fullres, fold_0)
-- Used pretrained as-is (explicitly disclosed in JSON output, UI, and REPORT.md).
+- Used pretrained as-is when live inference runs (disclosed in JSON output, UI, and REPORT.md).
 - Reference: Dot G, et al. "DentalSegmentator: robust open source deep learning-based CT and CBCT
   image segmentation." Journal of Dentistry (2024). DOI: 10.1016/j.jdent.2024.105130
 - Weights DOI: 10.5281/zenodo.10829675 (License: CC BY 4.0)
+
+Segmentation provenance is reported explicitly:
+- "model_inference"          DentalSegmentator ran on the uploaded volume in this request.
+- "uploaded_labelmap"        Labels came from the upload; no inference ran.
+- "demo_reference_labelmap"  Shipped demo whose labels are the official Slicer reference mask.
+- "demo_model_labelmap"      Shipped demo whose labels came from a precomputed model run.
 """
 
 import gzip
@@ -18,6 +24,7 @@ import struct
 import tempfile
 import time
 import zipfile
+import zlib
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -27,6 +34,35 @@ from scipy.ndimage import binary_erosion, label as cc_label
 from scipy.spatial import cKDTree
 
 from imaging import ImageProcessingError
+
+SEGMENTATION_SOURCES = {
+    "model_inference",
+    "uploaded_labelmap",
+    "demo_reference_labelmap",
+    "demo_model_labelmap",
+    "demo_labelmap",
+}
+
+# Demo-only labels. These are never used for an arbitrary upload: the API only applies
+# them when the server itself serves a known sample bundle.
+DEMO_SCAN_PROVENANCE: Dict[str, Dict[str, Any]] = {
+    "PostDentalSurgery": {
+        "source": "demo_reference_labelmap",
+        "detail": (
+            "Shipped demo labels are the official SlicerDentalSegmentator reference mask for this "
+            "scan (https://github.com/gaudot/SlicerDentalSegmentator), not a model prediction. "
+            "No DentalSegmentator inference was run for this demo."
+        ),
+    },
+    "PreDentalSurgery": {
+        "source": "demo_model_labelmap",
+        "detail": (
+            "Shipped demo labels were produced by DentalSegmentator nnU-Net in the Kaggle scan-2 "
+            "notebook and exported from that run. No reference mask was used for this demo, so no "
+            "Dice is reported."
+        ),
+    },
+}
 
 CBCT_CLASS_MAP = {
     1: "maxilla_upper_skull",
@@ -47,15 +83,81 @@ CBCT_RGBA_COLORS = {
 
 
 def is_cbct_filename(filename: str) -> bool:
-    """Returns True if the uploaded filename corresponds to a 3D CBCT volume or archive."""
+    """Returns True if the filename says the upload is a 3D CBCT volume or archive."""
     lower = (filename or "").lower()
-    return (
-        lower.endswith(".nii")
-        or lower.endswith(".nii.gz")
-        or lower.endswith(".gipl")
-        or lower.endswith(".gipl.gz")
-        or lower.endswith(".zip")
-    )
+    return lower.endswith(".nii") or lower.endswith(".nii.gz") or lower.endswith(".zip")
+
+
+def is_cbct_bytes(file_bytes: bytes, filename: str = "") -> bool:
+    """
+    Content-aware CBCT routing. Accepts a NIfTI header (plain or gzip) or a ZIP
+    containing NIfTI/DICOM members, independent of the uploaded filename.
+    """
+    if is_cbct_filename(filename):
+        return True
+    if not file_bytes:
+        return False
+
+    head = file_bytes[:512]
+    if head[:2] == b"\x1f\x8b":
+        try:
+            head = zlib.decompressobj(16 + zlib.MAX_WBITS).decompress(file_bytes[:65536], 512)
+        except zlib.error:
+            return False
+    if len(head) >= 348 and struct.unpack("<i", head[:4])[0] == 348:
+        return True
+
+    if file_bytes[:4] == b"PK\x03\x04":
+        try:
+            with zipfile.ZipFile(io.BytesIO(file_bytes), "r") as zf:
+                for name in zf.namelist():
+                    lower = name.lower()
+                    if lower.endswith((".nii", ".nii.gz", ".dcm")):
+                        return True
+                    if not Path(name).name.startswith(".") and "." not in Path(name).name:
+                        return True
+        except zipfile.BadZipFile:
+            return False
+    return False
+
+
+def _is_labelmap(arr: np.ndarray) -> bool:
+    """
+    True only for an integer-valued 3D array whose values are a subset of 0..5 and
+    that contains at least one foreground class. Float arrays are accepted only when
+    every value is integral (some tools save label maps as float32).
+    """
+    if arr.ndim != 3 or arr.size == 0:
+        return False
+    values = np.unique(arr)
+    if values.size < 2 or values.size > 6:
+        return False
+    if not np.all(np.isfinite(values)):
+        return False
+    if not np.allclose(values, np.round(values), atol=1e-6):
+        return False
+    return bool(values.min() >= 0 and values.max() <= 5 and values.max() > 0)
+
+
+def _read_declared_provenance(zf: zipfile.ZipFile) -> Optional[Dict[str, Any]]:
+    """
+    Reads an optional provenance.json from a bundle. It is informational only and is
+    never trusted to claim that inference ran; callers must still mark it unverified.
+    """
+    try:
+        if "provenance.json" not in zf.namelist():
+            return None
+        raw = json.loads(zf.read("provenance.json").decode("utf-8"))
+    except Exception:
+        return None
+    source = raw.get("segmentation_source") if isinstance(raw, dict) else None
+    if source not in SEGMENTATION_SOURCES:
+        return None
+    return {
+        "segmentation_source": source,
+        "model_inference_ran": bool(raw.get("model_inference_ran", False)),
+        "trusted": False,
+    }
 
 
 def parse_nifti_bytes(raw_bytes: bytes, is_gzipped: bool = False) -> Tuple[np.ndarray, Tuple[float, float, float]]:
@@ -144,10 +246,11 @@ def write_nifti_gz_bytes(vol_xyz: np.ndarray, spacing_xyz: Tuple[float, float, f
     return buf.getvalue()
 
 
-def _parse_dicom_zip(file_bytes: bytes) -> Tuple[np.ndarray, Optional[np.ndarray], Tuple[float, float, float]]:
+def _parse_dicom_zip(file_bytes: bytes) -> Tuple[np.ndarray, Optional[np.ndarray], Tuple[float, float, float], Dict[str, Any]]:
     """
-    Loads a zipped 3D DICOM series (or a zipped NIfTI volume + segmentation pair),
-    strips all patient PII tags by keeping only numeric voxel arrays & spacing.
+    Loads a zipped 3D DICOM series (or a zipped NIfTI volume + segmentation pair).
+    Only numeric voxel arrays and spacing leave this function: DICOM metadata,
+    including patient identifiers, is never retained or returned.
     """
     try:
         zf = zipfile.ZipFile(io.BytesIO(file_bytes), "r")
@@ -158,24 +261,52 @@ def _parse_dicom_zip(file_bytes: bytes) -> Tuple[np.ndarray, Optional[np.ndarray
     if not names:
         raise ImageProcessingError("Uploaded ZIP archive is empty.")
 
-    # Case A: ZIP contains NIfTI (.nii / .nii.gz) files (e.g., volume + optional segmentation mask)
+    declared = _read_declared_provenance(zf)
+
+    # Case A: ZIP contains NIfTI (.nii / .nii.gz) files (volume + optional segmentation)
     nii_names = [n for n in names if n.lower().endswith(".nii") or n.lower().endswith(".nii.gz")]
     if nii_names:
         vol_xyz = None
         seg_xyz = None
         spacing_xyz = (0.5, 0.5, 0.5)
-        for n in sorted(nii_names):
+        for n in sorted(nii_names, key=lambda x: ("seg" not in Path(x).name.lower(), x)):
             arr, sp = parse_nifti_bytes(zf.read(n))
-            uniq = set(np.unique(arr).astype(int).tolist())
-            if uniq.issubset({0, 1, 2, 3, 4, 5}) and len(uniq) > 1 and (seg_xyz is None or "seg" in n.lower()):
-                seg_xyz = arr.astype(np.uint8)
-                spacing_xyz = sp
-            else:
+            if _is_labelmap(arr):
+                if seg_xyz is None or "seg" in n.lower():
+                    seg_xyz = arr.astype(np.uint8)
+                    spacing_xyz = sp
+            elif vol_xyz is None:
                 vol_xyz = arr
                 spacing_xyz = sp
+
+        has_grayscale = vol_xyz is not None
+        if vol_xyz is not None and seg_xyz is not None and vol_xyz.shape != seg_xyz.shape:
+            raise ImageProcessingError(
+                f"NIfTI volume and segmentation shapes differ: {vol_xyz.shape} vs {seg_xyz.shape}."
+            )
         if vol_xyz is None and seg_xyz is not None:
-            vol_xyz = (seg_xyz.astype(np.int16) * 400)
-        return vol_xyz, seg_xyz, spacing_xyz
+            hu_lut = np.array([0, 700, 950, 1650, 1600, 250], dtype=np.int16)
+            vol_xyz = hu_lut[seg_xyz]
+        if vol_xyz is None:
+            raise ImageProcessingError("ZIP archive contains neither a NIfTI volume nor a label map.")
+
+        if seg_xyz is not None:
+            info = {
+                "source": "uploaded_labelmap",
+                "detail": "5-class label map supplied in the uploaded ZIP; no model inference was run.",
+                "container": "zip_nifti",
+                "has_grayscale_volume": has_grayscale,
+                "declared_provenance": declared,
+            }
+        else:
+            info = {
+                "source": None,
+                "detail": "Raw NIfTI volume supplied; segmentation requires DentalSegmentator inference.",
+                "container": "zip_nifti",
+                "has_grayscale_volume": True,
+                "declared_provenance": declared,
+            }
+        return vol_xyz, seg_xyz, spacing_xyz, info
 
     # Case B: ZIP contains a 3D DICOM series (.dcm slices)
     dcm_names = [n for n in names if n.lower().endswith(".dcm") or "." not in Path(n).name]
@@ -187,36 +318,60 @@ def _parse_dicom_zip(file_bytes: bytes) -> Tuple[np.ndarray, Optional[np.ndarray
     except ImportError as exc:
         raise ImageProcessingError("pydicom is required to decode 3D DICOM series archives.") from exc
 
+    def _geometry(ds):
+        """Returns (position along slice normal, instance number, normal or None)."""
+        pos = getattr(ds, "ImagePositionPatient", None)
+        iop = getattr(ds, "ImageOrientationPatient", None)
+        instance = float(getattr(ds, "InstanceNumber", 0.0) or 0.0)
+        if pos is not None and len(pos) >= 3:
+            pos_arr = np.array([float(v) for v in pos[:3]], dtype=np.float64)
+            normal = None
+            if iop is not None and len(iop) >= 6:
+                row = np.array([float(v) for v in iop[:3]], dtype=np.float64)
+                col = np.array([float(v) for v in iop[3:6]], dtype=np.float64)
+                n = np.cross(row, col)
+                norm = float(np.linalg.norm(n))
+                if norm > 0:
+                    normal = n / norm
+            if normal is not None:
+                return float(np.dot(pos_arr, normal)), instance, normal
+            return float(pos_arr[2]), instance, None
+        return float(getattr(ds, "SliceLocation", 0.0) or 0.0), instance, None
+
     slices = []
     for n in dcm_names:
         try:
             ds = pydicom.dcmread(io.BytesIO(zf.read(n)), force=True)
             if not hasattr(ds, "pixel_array"):
                 continue
-            z_pos = float(getattr(ds, "SliceLocation", 0.0))
-            if hasattr(ds, "ImagePositionPatient") and len(ds.ImagePositionPatient) >= 3:
-                z_pos = float(ds.ImagePositionPatient[2])
-            elif hasattr(ds, "InstanceNumber"):
-                z_pos = float(ds.InstanceNumber)
-            slices.append((z_pos, ds))
+            slices.append((*_geometry(ds), ds))
         except Exception:
             continue
 
     if len(slices) < 3:
         raise ImageProcessingError("Could not decode a valid 3D DICOM slice stack from the ZIP archive.")
 
-    slices.sort(key=lambda item: item[0])
-    first_ds = slices[0][1]
+    slices.sort(key=lambda item: (item[0], item[1]))
+    first_ds = slices[0][3]
     px_spacing = getattr(first_ds, "PixelSpacing", [0.5, 0.5])
     sy, sx = float(px_spacing[0]), float(px_spacing[1])
-    if len(slices) > 1 and abs(slices[-1][0] - slices[0][0]) > 1e-4:
-        sz = abs(slices[-1][0] - slices[0][0]) / float(len(slices) - 1)
+
+    positions = np.array([item[0] for item in slices], dtype=np.float64)
+    diffs = np.abs(np.diff(positions))
+    diffs = diffs[diffs > 1e-4]
+    if diffs.size:
+        sz = float(np.median(diffs))
     else:
-        sz = float(getattr(first_ds, "SliceThickness", 0.5))
+        sz = float(getattr(first_ds, "SliceThickness", 0.5) or 0.5)
 
     stack_zyx = []
-    for _, ds in slices:
+    expected_shape = None
+    for _, _, _, ds in slices:
         arr2d = ds.pixel_array.astype(np.float32)
+        if expected_shape is None:
+            expected_shape = arr2d.shape
+        elif arr2d.shape != expected_shape:
+            raise ImageProcessingError("DICOM slices in the ZIP do not share the same dimensions.")
         slope = float(getattr(ds, "RescaleSlope", 1.0))
         inter = float(getattr(ds, "RescaleIntercept", 0.0))
         stack_zyx.append(arr2d * slope + inter)
@@ -224,31 +379,65 @@ def _parse_dicom_zip(file_bytes: bytes) -> Tuple[np.ndarray, Optional[np.ndarray
     vol_zyx = np.stack(stack_zyx, axis=0)
     # Transpose (Z, Y, X) -> (X, Y, Z)
     vol_xyz = vol_zyx.transpose(2, 1, 0).copy()
-    return vol_xyz, None, (sx, sy, sz)
+    info = {
+        "source": None,
+        "detail": (
+            "Raw 3D DICOM series; DICOM metadata (including patient identifiers) is discarded, "
+            "and only voxel intensities and spacing are retained. Slices are sorted along the "
+            "acquisition normal; oblique gantry tilt is not resampled."
+        ),
+        "container": "zip_dicom",
+        "has_grayscale_volume": True,
+        "declared_provenance": declared,
+    }
+    return vol_xyz, None, (sx, sy, sz), info
 
 
-def load_cbct_input(file_bytes: bytes, filename: str) -> Tuple[np.ndarray, Optional[np.ndarray], Tuple[float, float, float]]:
+def load_cbct_input(
+    file_bytes: bytes,
+    filename: str,
+) -> Tuple[np.ndarray, Optional[np.ndarray], Tuple[float, float, float], Dict[str, Any]]:
     """
     Loads a 3D CBCT input from NIfTI (.nii, .nii.gz) or ZIP (.zip).
-    Returns (vol_xyz, optional_seg_xyz, spacing_xyz_mm).
+    Returns (vol_xyz, optional_seg_xyz, spacing_xyz_mm, info).
+
+    info["source"] is "uploaded_labelmap" when labels came from the upload,
+    or None when the volume still needs model inference. It is never set to
+    "model_inference" here.
     """
     if not file_bytes:
         raise ImageProcessingError("Uploaded CBCT file is empty.")
 
     lower = (filename or "").lower()
-    if lower.endswith(".zip"):
+    if lower.endswith(".zip") or file_bytes[:4] == b"PK\x03\x04":
         return _parse_dicom_zip(file_bytes)
 
-    if lower.endswith(".nii") or lower.endswith(".nii.gz"):
-        arr, spacing_xyz = parse_nifti_bytes(file_bytes, is_gzipped=lower.endswith(".gz"))
-        uniq = set(np.unique(arr).astype(int).tolist())
-        # Check if the uploaded NIfTI is already a 5-class DentalSegmentator labelmap
-        if uniq.issubset({0, 1, 2, 3, 4, 5}) and len(uniq) >= 2:
+    is_gz = lower.endswith(".gz") or file_bytes[:2] == b"\x1f\x8b"
+    if lower.endswith(".nii") or lower.endswith(".nii.gz") or is_gz:
+        arr, spacing_xyz = parse_nifti_bytes(file_bytes, is_gzipped=is_gz)
+        if _is_labelmap(arr):
             seg_xyz = arr.astype(np.uint8)
             hu_lut = np.array([0, 700, 950, 1650, 1600, 250], dtype=np.int16)
             vol_xyz = hu_lut[seg_xyz]
-            return vol_xyz, seg_xyz, spacing_xyz
-        return arr, None, spacing_xyz
+            info = {
+                "source": "uploaded_labelmap",
+                "detail": (
+                    "5-class label map supplied as a NIfTI upload; no model inference was run. "
+                    "No grayscale volume was supplied, so the slice preview uses a synthetic intensity LUT."
+                ),
+                "container": "nifti",
+                "has_grayscale_volume": False,
+                "declared_provenance": None,
+            }
+            return vol_xyz, seg_xyz, spacing_xyz, info
+        info = {
+            "source": None,
+            "detail": "Raw NIfTI volume supplied; segmentation requires DentalSegmentator inference.",
+            "container": "nifti",
+            "has_grayscale_volume": True,
+            "declared_provenance": None,
+        }
+        return arr, None, spacing_xyz, info
 
     raise ImageProcessingError(f"Unsupported 3D CBCT format for '{filename}'. Upload .nii, .nii.gz, or DICOM .zip.")
 

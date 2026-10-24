@@ -1,34 +1,31 @@
 {
-  "image_id": "cbct_post_dental_surgery",
+  "image_id": "PostDentalSurgery",
   "modality": "CBCT",
+  "segmentation_source": "demo_reference_labelmap",
+  "segmentation_source_detail": "Shipped demo labels are the official SlicerDentalSegmentator reference mask for this scan (https://github.com/gaudot/SlicerDentalSegmentator), not a model prediction. No DentalSegmentator inference was run for this demo.",
+  "demo": true,
   "model": {
     "name": "DentalSegmentator_nnUNetv2_3d_fullres",
     "version": "v1.0.0 (Dataset112_DentalSegmentator, Dot et al. 2024)",
     "weights_doi": "10.5281/zenodo.10829675",
     "license": "CC BY 4.0",
-    "pretrained_as_is": true
+    "pretrained_as_is": true,
+    "inference_ran_in_this_request": false
   },
-  "hardware_benchmark": {
-    "python_version": "3.13.15",
-    "torch_version": "2.11.0+cu128",
-    "cuda_available": true,
-    "gpu_name": "Tesla T4",
-    "gpu_vram_gb": 14.56,
-    "cpu_count": 4,
-    "ram_total_gb": 31.35,
-    "model_init_ms": 2131.9,
-    "gpu_inference_ms": 131407.1,
-    "postprocessing_ms": 5816.3,
-    "mesh_generation_ms": 938.6,
-    "peak_gpu_vram_mb": 4936.0,
-    "peak_cpu_rss_mb": 2641.8
+  "inference_ms": 9473.5,
+  "timings_ms": {
+    "load": 1871.9,
+    "segmentation": null,
+    "postprocess": 2294.6,
+    "rendering": 246.1,
+    "meshing": 5061.0,
+    "total": 9473.5
   },
-  "reference_verification_dice": {
-    "maxilla_upper_skull": 0.9768,
-    "mandible": 0.9849,
-    "upper_teeth": 0.9867,
-    "lower_teeth": 0.9745,
-    "mandibular_canal": 0.8968
+  "memory": {
+    "process_rss_before_mb": 345.2,
+    "process_rss_after_mb": 598.4,
+    "process_rss_delta_mb": 253.2,
+    "gpu_peak_allocated_mb": null
   },
   "volume_metadata": {
     "dimensions_voxels": [
@@ -41,14 +38,15 @@
       0.5,
       0.5
     ],
+    "has_grayscale_volume": true,
     "segmented_structures": {
       "maxilla_upper_skull": {
         "label_id": 1,
-        "voxel_count": 1476019,
-        "volume_cm3": 184.5,
+        "voxel_count": 1446339,
+        "volume_cm3": 180.79,
         "bbox_3d_voxel": [
           37,
-          57,
+          58,
           126,
           326,
           359,
@@ -57,12 +55,12 @@
       },
       "mandible": {
         "label_id": 2,
-        "voxel_count": 310556,
-        "volume_cm3": 38.82,
+        "voxel_count": 309895,
+        "volume_cm3": 38.74,
         "bbox_3d_voxel": [
           71,
           66,
-          39,
+          40,
           297,
           234,
           207
@@ -70,8 +68,8 @@
       },
       "upper_teeth": {
         "label_id": 3,
-        "voxel_count": 75590,
-        "volume_cm3": 9.45,
+        "voxel_count": 75300,
+        "volume_cm3": 9.41,
         "bbox_3d_voxel": [
           130,
           67,
@@ -83,32 +81,33 @@
       },
       "lower_teeth": {
         "label_id": 4,
-        "voxel_count": 62663,
-        "volume_cm3": 7.83,
+        "voxel_count": 63081,
+        "volume_cm3": 7.89,
         "bbox_3d_voxel": [
           118,
           72,
           68,
-          248,
+          247,
           163,
           126
         ]
       },
       "mandibular_canal": {
         "label_id": 5,
-        "voxel_count": 6063,
-        "volume_cm3": 0.76,
+        "voxel_count": 6655,
+        "volume_cm3": 0.83,
         "bbox_3d_voxel": [
-          99,
+          98,
           97,
           61,
           265,
           196,
-          138
+          140
         ]
       }
     }
   },
+  "original_image_note": null,
   "findings": [
     {
       "class": "mandibular_canal_to_lower_teeth_clearance",
@@ -116,38 +115,46 @@
       "min_distance_mm": 0.71,
       "confidence": 1.0,
       "tooth_fdi": null,
+      "bbox": [
+        108,
+        143,
+        79,
+        129,
+        163,
+        100
+      ],
       "bbox_3d_voxel": [
         108,
-        141,
-        78,
+        143,
+        79,
         129,
-        161,
-        99
+        163,
+        100
       ],
       "closest_lower_tooth_voxel": [
         119,
-        151,
-        89
+        153,
+        90
       ],
       "closest_canal_voxel": [
         118,
-        151,
-        88
+        153,
+        89
       ],
       "closest_lower_tooth_mm": [
         59.5,
-        75.5,
-        44.5
+        76.5,
+        45.0
       ],
       "closest_canal_mm": [
         59.0,
-        75.5,
-        44.0
+        76.5,
+        44.5
       ],
       "key_slice_indices": {
         "sagittal_x": 119,
-        "coronal_y": 151,
-        "axial_z": 89
+        "coronal_y": 153,
+        "axial_z": 90
       }
     },
     {
@@ -156,6 +163,14 @@
       "min_distance_mm": 1.58,
       "confidence": 1.0,
       "tooth_fdi": null,
+      "bbox": [
+        225,
+        122,
+        62,
+        246,
+        142,
+        85
+      ],
       "bbox_3d_voxel": [
         225,
         122,
@@ -192,15 +207,16 @@
     }
   ],
   "summary": "CBCT 5-structure segmentation complete (Maxilla, Mandible, Upper Teeth, Lower Teeth, Mandibular Canal). Right lower teeth-to-mandibular canal minimum clearance: 0.71 mm; Left lower teeth-to-mandibular canal minimum clearance: 1.58 mm.",
-  "annotated_image_url": "/results/cbct_post_dental_surgery_annotated.png",
-  "mesh_glb_url": "/results/cbct_post_dental_surgery_scene.glb",
+  "original_image_url": "/results/PostDentalSurgery_cbct_original.png",
+  "annotated_image_url": "/results/PostDentalSurgery_cbct_ortho.png",
+  "mesh_glb_url": "/results/PostDentalSurgery_scene.glb",
   "mesh_stl_urls": {
-    "maxilla_upper_skull": "/results/PostDentalSurgery_maxilla_upper_skull.stl",
-    "mandible": "/results/PostDentalSurgery_mandible.stl",
-    "upper_teeth": "/results/PostDentalSurgery_upper_teeth.stl",
+    "mandibular_canal": "/results/PostDentalSurgery_mandibular_canal.stl",
     "lower_teeth": "/results/PostDentalSurgery_lower_teeth.stl",
-    "mandibular_canal": "/results/PostDentalSurgery_mandibular_canal.stl"
+    "upper_teeth": "/results/PostDentalSurgery_upper_teeth.stl",
+    "maxilla_upper_skull": "/results/PostDentalSurgery_maxilla_upper_skull.stl",
+    "mandible": "/results/PostDentalSurgery_mandible.stl"
   },
-  "disclaimer": "AI-assisted findings for dentist review. Not a diagnosis.",
-  "original_image_url": "/results/cbct_post_dental_surgery_original.png"
+  "three_d_available": true,
+  "disclaimer": "AI-assisted findings for dentist review. Not a diagnosis."
 }

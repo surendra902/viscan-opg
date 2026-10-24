@@ -20,7 +20,13 @@ from fastapi.responses import JSONResponse, FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
-from service import DentalAnalysisService, DISCLAIMER_TEXT, ModelNotLoadedError
+from service import (
+    DentalAnalysisService,
+    DISCLAIMER_TEXT,
+    ModelNotLoadedError,
+    CbctInferenceError,
+)
+from cbct_pipeline import DEMO_SCAN_PROVENANCE
 from imaging import ImageProcessingError, InvalidImageError, UnsupportedDICOMError
 from input_gate import NonDentalInputError
 
@@ -53,19 +59,22 @@ app.mount("/samples", StaticFiles(directory=str(SAMPLES_DIR)), name="samples")
 weights_file = os.getenv("VISCAN_WEIGHTS_PATH", "checkpoints/best_model.pth")
 service = DentalAnalysisService(
     weights_path=weights_file if os.path.exists(weights_file) else None,
+    device=os.getenv("VISCAN_DEVICE") or None,
     results_dir=str(RESULTS_DIR),
 )
 
 
 @app.get("/health")
 def health_check():
-    """Health status and model readiness endpoint."""
+    """Health status and model readiness endpoint, including live 3D readiness."""
     model_ready = service.model is not None
+    cbct = service.cbct_readiness()
     return {
         "status": "healthy" if model_ready else "degraded",
         "model_loaded": model_ready,
         "device": str(service.device),
         "results_dir": str(RESULTS_DIR),
+        "cbct": cbct,
     }
 
 
@@ -95,6 +104,8 @@ async def analyze_opg(
         raise
     except ModelNotLoadedError as e:
         raise HTTPException(status_code=503, detail=f"Model unavailable: {str(e)}")
+    except CbctInferenceError as e:
+        raise HTTPException(status_code=500, detail=f"CBCT inference failed: {str(e)}")
     except InvalidImageError as e:
         raise HTTPException(status_code=400, detail=f"Invalid image: {str(e)}")
     except UnsupportedDICOMError as e:
@@ -119,11 +130,21 @@ def list_sample_cbct_scans():
 
 @app.post("/analyze/sample_cbct")
 def analyze_sample_cbct(scan: str = Query(..., description="Scan name from GET /analyze/sample_cbct/scans")):
-    """Runs the full 3D CBCT pipeline on one verified demo scan; slices, findings and meshes come from that scan only."""
+    """
+    Runs the 3D pipeline on a shipped, pre-segmented demo bundle. Labels are never
+    presented as live inference: the response carries the demo's exact provenance.
+    """
     bundles = _scan_bundles()
     if scan not in bundles:
         raise HTTPException(status_code=404, detail=f"Unknown scan '{scan}'. Available: {list(bundles)}")
-    result = service.analyze_cbct_bytes(bundles[scan].read_bytes(), bundles[scan].name)
+    result = service.analyze_cbct_bytes(
+        bundles[scan].read_bytes(),
+        bundles[scan].name,
+        provenance_override=DEMO_SCAN_PROVENANCE.get(scan, {
+            "source": "demo_labelmap",
+            "detail": "Shipped pre-segmented demo bundle; no inference ran for this request.",
+        }),
+    )
     return JSONResponse(status_code=200, content=result)
 
 
@@ -276,6 +297,7 @@ def index_page():
     .bg-caries { background: var(--caries); }
     .bg-periapical { background: var(--periapical); }
     .bg-deep-caries { background: var(--deep-caries); }
+    .bg-mandibular-canal-to-lower-teeth-clearance { background: #0d9488; color: #fff; }
     table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 13px; }
     th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border); }
     th { color: var(--text-muted); }
@@ -334,7 +356,17 @@ def index_page():
       </div>
 
       <button class="btn" id="analyzeBtn" disabled>Run Inference</button>
-      <button class="btn" id="sampleCbctBtn" style="margin-top: 8px; background: #0d9488; color: #fff;">Load Verified 3D CBCT Sample</button>
+
+      <div style="margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border);">
+        <p style="font-size: 13px; font-weight: 600; margin-bottom: 6px;">Demo CBCT (pre-segmented, not live inference)</p>
+        <select id="scanSelect" style="width: 100%; padding: 8px; font-size: 13px; border-radius: 6px; border: 1px solid var(--border); background: #0f172a; color: var(--text); margin-bottom: 8px;"></select>
+        <button class="btn" id="sampleCbctBtn" style="background: #0d9488; color: #fff;">Load demo CBCT</button>
+        <p style="font-size: 11px; color: var(--text-muted); margin-top: 6px;">
+          Demo labels are shipped with the scan; they are not produced from your upload.
+          <span id="cbctReadiness">Checking live 3D availability...</span>
+        </p>
+      </div>
+
       <div class="status-msg" id="statusBox"></div>
 
       <div style="margin-top: 24px; font-size: 12px; color: var(--text-muted);">
@@ -368,16 +400,18 @@ def index_page():
 
       <!-- Interactive 3D CBCT Mesh Viewer (shown when modality === 'CBCT') -->
       <div id="cbct3dSection" style="display: none; margin-top: 18px; background: #0b1120; border: 1px solid var(--border); border-radius: 8px; padding: 14px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
-          <h3 style="font-size: 15px; color: var(--primary);">Interactive 3D CBCT Anatomical Mesh (3D Slicer DentalSegmentator — Orbit / Zoom / Pan)</h3>
-          <select id="scanSelect" onchange="loadSampleCbct(this.value)" style="padding: 4px 10px; font-size: 12px; border-radius: 4px; border: 1px solid var(--border); background: #1e293b; color: #f8fafc;"></select>
+        <div style="margin-bottom: 10px;">
+          <h3 style="font-size: 15px; color: var(--primary);">Interactive 3D CBCT Mesh (this result — drag to orbit, scroll to zoom)</h3>
+          <p id="provenanceBanner" style="font-size: 12px; margin-top: 4px;"></p>
         </div>
-        <model-viewer id="cbctModelViewer" src="" alt="3D CBCT Dental Segmentation" camera-controls auto-rotate shadow-intensity="0.8" style="width: 100%; height: 440px; background-color: #f8fafc; border-radius: 6px;"></model-viewer>
+        <model-viewer id="cbctModelViewer" alt="3D CBCT Dental Segmentation" camera-controls auto-rotate shadow-intensity="0.8" style="width: 100%; height: 440px; background-color: #f8fafc; border-radius: 6px;"></model-viewer>
       </div>
 
       <div class="findings-card">
         <h3 style="font-size: 16px; margin-bottom: 8px;">Clinical Summary</h3>
         <p id="summaryText" style="font-size: 14px; color: var(--text-muted);">Upload an OPG radiograph or 3D CBCT volume to generate findings.</p>
+        <p id="threeDNote" style="font-size: 12px; color: var(--text-muted); margin-top: 6px; display: none;"></p>
+        <p id="imageNote" style="font-size: 12px; color: #fbbf24; margin-top: 6px; display: none;"></p>
         
         <table id="findingsTable" style="display: none;">
           <thead>
@@ -423,6 +457,26 @@ def index_page():
     const downloadGlbBtn = document.getElementById('downloadGlbBtn');
     const cbct3dSection = document.getElementById('cbct3dSection');
     const cbctModelViewer = document.getElementById('cbctModelViewer');
+    const provenanceBanner = document.getElementById('provenanceBanner');
+    const threeDNote = document.getElementById('threeDNote');
+    const imageNote = document.getElementById('imageNote');
+    const cbctReadiness = document.getElementById('cbctReadiness');
+
+    const SOURCE_LABELS = {
+      model_inference: 'LIVE MODEL INFERENCE — DentalSegmentator ran on this upload.',
+      uploaded_labelmap: 'UPLOADED LABEL MAP — no model inference ran for this result.',
+      demo_reference_labelmap: 'DEMO REFERENCE MASK — official Slicer reference labels, not live inference.',
+      demo_model_labelmap: 'DEMO MODEL OUTPUT — precomputed labels, not live inference.',
+      demo_labelmap: 'DEMO LABEL MAP — precomputed labels, not live inference.'
+    };
+
+    function clear3D() {
+      cbct3dSection.style.display = 'none';
+      cbctModelViewer.removeAttribute('src');
+      downloadGlbBtn.style.display = 'none';
+      downloadGlbBtn.removeAttribute('href');
+      provenanceBanner.textContent = '';
+    }
 
     confSlider.oninput = () => { confVal.textContent = parseFloat(confSlider.value).toFixed(2); };
 
@@ -433,14 +487,16 @@ def index_page():
         analyzeBtn.disabled = false;
         showStatus('', false);
 
-        // Clear any stale results from a previous analysis
+        // Clear any stale results (including a previously loaded demo mesh)
         latestResult = null;
         annotPreview.innerHTML = '<span style="color: var(--text-muted); font-size: 13px;">Awaiting analysis</span>';
         summaryText.textContent = 'Upload an OPG radiograph or 3D CBCT volume to generate findings.';
         findingsBody.innerHTML = '';
         findingsTable.style.display = 'none';
         downloadBar.style.display = 'none';
-        cbct3dSection.style.display = 'none';
+        threeDNote.style.display = 'none';
+        imageNote.style.display = 'none';
+        clear3D();
 
         const lower = selectedFile.name.toLowerCase();
         if (lower.endsWith('.png') || lower.endsWith('.jpg') || lower.endsWith('.jpeg')) {
@@ -466,7 +522,10 @@ def index_page():
         latestResult = data;
         displayResults(data);
         document.getElementById('scanSelect').value = scanName;
-        showStatus(`3D CBCT analysis of ${scanName} complete in ${data.inference_ms}ms.`, true, false);
+        showStatus(
+          `Demo "${scanName}" rendered in ${data.inference_ms}ms. Labels are pre-segmented (${data.segmentation_source}); no inference ran for this click.`,
+          true, false
+        );
       } catch (err) {
         showStatus(err.message, true, true);
       } finally {
@@ -479,6 +538,13 @@ def index_page():
       sel.innerHTML = '';
       (d.scans || []).forEach(n => { const o = document.createElement('option'); o.value = n; o.textContent = n; sel.appendChild(o); });
     });
+
+    fetch('/health').then(r => r.json()).then(d => {
+      const c = d.cbct || {};
+      cbctReadiness.textContent = c.ready
+        ? ` Live 3D inference: ready (${c.device}).`
+        : ` Live 3D inference: unavailable — ${c.reason || 'demo only'}`;
+    }).catch(() => { cbctReadiness.textContent = ' Live 3D readiness could not be checked.'; });
 
     sampleCbctBtn.onclick = () => loadSampleCbct(document.getElementById('scanSelect').value);
 
@@ -503,7 +569,20 @@ def index_page():
 
         latestResult = data;
         displayResults(data);
-        showStatus(`Analysis complete in ${data.inference_ms}ms.`, true, false);
+        if (data.modality === 'CBCT') {
+          const ran = data.model && data.model.inference_ran_in_this_request;
+          const segMs = ran && data.timings_ms && data.timings_ms.segmentation !== null
+            ? ` Model segmentation: ${data.timings_ms.segmentation}ms.` : '';
+          showStatus(
+            `Analysis complete in ${data.inference_ms}ms.${segMs} Source: ${data.segmentation_source}.`,
+            true, false
+          );
+        } else {
+          showStatus(
+            `2D OPG analysis complete in ${data.inference_ms}ms. No 3D model is produced from a 2D radiograph.`,
+            true, false
+          );
+        }
       } catch (err) {
         showStatus(err.message, true, true);
       } finally {
@@ -518,15 +597,33 @@ def index_page():
       summaryText.textContent = data.summary;
       annotPreview.innerHTML = `<img src="${data.annotated_image_url}" alt="Annotated">`;
 
-      if (data.modality === 'CBCT' && data.mesh_glb_url) {
+      threeDNote.style.display = 'none';
+      imageNote.style.display = 'none';
+
+      if (data.modality === 'CBCT' && data.three_d_available && data.mesh_glb_url) {
         cbct3dSection.style.display = 'block';
         cbctModelViewer.src = data.mesh_glb_url;
         downloadGlbBtn.style.display = 'inline-block';
         downloadGlbBtn.href = data.mesh_glb_url;
         downloadGlbBtn.download = `${data.image_id}_scene.glb`;
+
+        const source = data.segmentation_source || 'unknown';
+        const label = SOURCE_LABELS[source] || `SEGMENTATION SOURCE: ${source}`;
+        provenanceBanner.textContent = `${label} ${data.segmentation_source_detail || ''}`.trim();
+        provenanceBanner.style.color = source === 'model_inference'
+          ? '#34d399'
+          : (source.startsWith('demo') ? '#fbbf24' : '#38bdf8');
+
+        if (data.original_image_note) {
+          imageNote.textContent = data.original_image_note;
+          imageNote.style.display = 'block';
+        }
       } else {
-        cbct3dSection.style.display = 'none';
-        downloadGlbBtn.style.display = 'none';
+        clear3D();
+        if (data.three_d_note) {
+          threeDNote.textContent = data.three_d_note;
+          threeDNote.style.display = 'block';
+        }
       }
 
       findingsBody.innerHTML = '';

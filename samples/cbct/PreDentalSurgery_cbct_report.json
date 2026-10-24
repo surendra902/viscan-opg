@@ -1,14 +1,32 @@
 {
-  "image_id": "cbct_5da50b96",
+  "image_id": "PreDentalSurgery",
   "modality": "CBCT",
+  "segmentation_source": "demo_model_labelmap",
+  "segmentation_source_detail": "Shipped demo labels were produced by DentalSegmentator nnU-Net in the Kaggle scan-2 notebook and exported from that run. No reference mask was used for this demo, so no Dice is reported.",
+  "demo": true,
   "model": {
     "name": "DentalSegmentator_nnUNetv2_3d_fullres",
     "version": "v1.0.0 (Dataset112_DentalSegmentator, Dot et al. 2024)",
     "weights_doi": "10.5281/zenodo.10829675",
     "license": "CC BY 4.0",
-    "pretrained_as_is": true
+    "pretrained_as_is": true,
+    "inference_ran_in_this_request": false
   },
-  "inference_ms": 12344.3,
+  "inference_ms": 9744.7,
+  "timings_ms": {
+    "load": 1806.7,
+    "segmentation": null,
+    "postprocess": 3248.2,
+    "rendering": 247.0,
+    "meshing": 4442.8,
+    "total": 9744.7
+  },
+  "memory": {
+    "process_rss_before_mb": 343.4,
+    "process_rss_after_mb": 590.2,
+    "process_rss_delta_mb": 246.8,
+    "gpu_peak_allocated_mb": null
+  },
   "volume_metadata": {
     "dimensions_voxels": [
       360,
@@ -20,6 +38,7 @@
       0.5,
       0.5
     ],
+    "has_grayscale_volume": true,
     "segmented_structures": {
       "maxilla_upper_skull": {
         "label_id": 1,
@@ -88,6 +107,7 @@
       }
     }
   },
+  "original_image_note": null,
   "findings": [
     {
       "class": "mandibular_canal_to_lower_teeth_clearance",
@@ -187,15 +207,16 @@
     }
   ],
   "summary": "CBCT 5-structure segmentation complete (Maxilla, Mandible, Upper Teeth, Lower Teeth, Mandibular Canal). Right lower teeth-to-mandibular canal minimum clearance: 2.12 mm; Left lower teeth-to-mandibular canal minimum clearance: 1.50 mm.",
-  "original_image_url": "/results/cbct_5da50b96_original.png",
-  "annotated_image_url": "/results/cbct_5da50b96_annotated.png",
-  "mesh_glb_url": "/results/cbct_5da50b96_scene.glb",
+  "original_image_url": "/results/PreDentalSurgery_cbct_original.png",
+  "annotated_image_url": "/results/PreDentalSurgery_cbct_ortho.png",
+  "mesh_glb_url": "/results/PreDentalSurgery_scene.glb",
   "mesh_stl_urls": {
-    "mandibular_canal": "/results/cbct_5da50b96_mandibular_canal.stl",
-    "lower_teeth": "/results/cbct_5da50b96_lower_teeth.stl",
-    "upper_teeth": "/results/cbct_5da50b96_upper_teeth.stl",
-    "maxilla_upper_skull": "/results/cbct_5da50b96_maxilla_upper_skull.stl",
-    "mandible": "/results/cbct_5da50b96_mandible.stl"
+    "mandibular_canal": "/results/PreDentalSurgery_mandibular_canal.stl",
+    "lower_teeth": "/results/PreDentalSurgery_lower_teeth.stl",
+    "upper_teeth": "/results/PreDentalSurgery_upper_teeth.stl",
+    "maxilla_upper_skull": "/results/PreDentalSurgery_maxilla_upper_skull.stl",
+    "mandible": "/results/PreDentalSurgery_mandible.stl"
   },
+  "three_d_available": true,
   "disclaimer": "AI-assisted findings for dentist review. Not a diagnosis."
 }

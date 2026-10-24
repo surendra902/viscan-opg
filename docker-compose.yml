@@ -8,13 +8,42 @@ services:
     volumes:
       - ./checkpoints:/app/checkpoints
       - ./results:/app/results
+      - ./samples:/app/samples:ro
     environment:
       - VISCAN_WEIGHTS_PATH=checkpoints/best_model.pth
       - VISCAN_THRESHOLD=0.70
       - PYTHONUNBUFFERED=1
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/docs"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Opt-in: live raw-CBCT segmentation. Requires the Zenodo DentalSegmentator
+  # weights extracted under ./cbct_weights (dataset.json + fold_0/checkpoint_final.pth).
+  # Start with: docker compose --profile cbct up viscan-cbct
+  viscan-cbct:
+    profiles: ["cbct"]
+    build:
+      context: .
+      args:
+        INSTALL_CBCT: "true"
+    ports:
+      - "8001:8000"
+    volumes:
+      - ./checkpoints:/app/checkpoints
+      - ./results-cbct:/app/results
+      - ./cbct_weights:/cbct_weights:ro
+      - ./samples:/app/samples:ro
+    environment:
+      - VISCAN_WEIGHTS_PATH=checkpoints/best_model.pth
+      - VISCAN_THRESHOLD=0.70
+      - VISCAN_CBCT_WEIGHTS_DIR=/cbct_weights
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
       timeout: 10s
       retries: 3

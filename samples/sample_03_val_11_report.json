@@ -5,9 +5,12 @@
     "name": "fasterrcnn_resnet50_fpn_v2",
     "version": "2.0.0"
   },
-  "inference_ms": 7231.2,
+  "inference_ms": 8768.7,
   "findings": [],
   "summary": "No pathological findings detected at current confidence threshold.",
-  "annotated_image_url": "/results/sample_03_val_11_annotated.png",
+  "original_image_url": "/samples/sample_03_val_11_input.png",
+  "annotated_image_url": "/samples/sample_03_val_11_annotated.png",
+  "three_d_available": false,
+  "three_d_note": "No 3D model for a 2D OPG: a panoramic radiograph contains no volumetric data. Upload a CBCT volume (.nii, .nii.gz, or a zipped DICOM/NIfTI series) for 3D segmentation.",
   "disclaimer": "AI-assisted findings for dentist review. Not a diagnosis."
 }

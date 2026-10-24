@@ -5,17 +5,17 @@
     "name": "fasterrcnn_resnet50_fpn_v2",
     "version": "2.0.0"
   },
-  "inference_ms": 7000.1,
+  "inference_ms": 8301.8,
   "findings": [
     {
       "class": "impacted_tooth",
       "confidence": 0.99,
       "tooth_fdi": null,
       "bbox": [
-        1259.6,
-        171.7,
-        1394.7,
-        308.2
+        1260.5,
+        176.1,
+        1391.4,
+        301.8
       ]
     },
     {
@@ -23,80 +23,83 @@
       "confidence": 0.99,
       "tooth_fdi": null,
       "bbox": [
-        1345.6,
-        403.4,
-        1477.6,
-        552.7
+        1344.3,
+        401.0,
+        1477.9,
+        552.1
+      ]
+    },
+    {
+      "class": "caries",
+      "confidence": 0.98,
+      "tooth_fdi": null,
+      "bbox": [
+        1142.7,
+        460.4,
+        1323.1,
+        663.3
       ]
     },
     {
       "class": "impacted_tooth",
-      "confidence": 0.95,
+      "confidence": 0.97,
       "tooth_fdi": null,
       "bbox": [
-        450.1,
-        450.9,
-        555.6,
-        606.8
+        448.5,
+        453.3,
+        555.0,
+        605.4
       ]
     },
     {
       "class": "caries",
-      "confidence": 0.94,
+      "confidence": 0.87,
       "tooth_fdi": null,
       "bbox": [
-        1146.8,
-        467.0,
-        1316.2,
-        653.7
+        472.3,
+        465.1,
+        656.7,
+        661.5
       ]
     },
     {
       "class": "caries",
-      "confidence": 0.92,
+      "confidence": 0.85,
       "tooth_fdi": null,
       "bbox": [
-        698.0,
-        534.5,
-        795.3,
-        706.6
+        556.8,
+        500.4,
+        753.2,
+        703.7
       ]
     },
     {
       "class": "caries",
-      "confidence": 0.92,
+      "confidence": 0.84,
       "tooth_fdi": null,
       "bbox": [
-        564.0,
-        503.2,
-        751.7,
-        699.0
+        1129.9,
+        280.1,
+        1218.2,
+        467.5
       ]
     },
     {
       "class": "caries",
-      "confidence": 0.89,
+      "confidence": 0.73,
       "tooth_fdi": null,
       "bbox": [
-        474.6,
-        466.7,
-        656.6,
-        657.6
-      ]
-    },
-    {
-      "class": "caries",
-      "confidence": 0.79,
-      "tooth_fdi": null,
-      "bbox": [
-        1081.1,
-        278.7,
-        1176.3,
-        485.3
+        980.9,
+        546.3,
+        1049.7,
+        719.3
       ]
     }
   ],
   "summary": "8 findings: 5 caries, 3 impacted tooth.",
-  "annotated_image_url": "/results/sample_01_val_1_annotated.png",
+  "original_image_url": "/samples/sample_01_val_1_input.png",
+  "annotated_image_url": "/samples/sample_01_val_1_annotated.png",
+  "three_d_available": false,
+  "three_d_note": "No 3D model for a 2D OPG: a panoramic radiograph contains no volumetric data. Upload a CBCT volume (.nii, .nii.gz, or a zipped DICOM/NIfTI series) for 3D segmentation.",
   "disclaimer": "AI-assisted findings for dentist review. Not a diagnosis."
 }

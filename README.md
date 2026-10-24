@@ -8,14 +8,15 @@
 
 **🚀 Live Interactive Demo:** [https://huggingface.co/spaces/surendra08/viscan-opg](https://huggingface.co/spaces/surendra08/viscan-opg)
 
-An end-to-end clinical decision-support prototype for automated finding detection in panoramic dental radiographs (OPG). Detects 4 core pathological conditions with original pixel coordinates, confidence scores, deterministic summaries, and side-by-side visual clinical review.
+An end-to-end clinical decision-support prototype for automated finding detection in panoramic dental radiographs (OPG). Detects 4 core pathological conditions with original pixel coordinates, confidence scores, deterministic summaries, and side-by-side visual clinical review. The same API also accepts 3D CBCT input; live nnU-Net inference is optional and the service fails closed when it is not installed.
 
 ---
 
 ## 1. Key Capabilities
 
 - **Core 2D OPG Pathology Detection:** Detects `caries`, `deep_caries`, `periapical_lesion`, and `impacted_tooth` with original pixel coordinates and confidence scores.
-- **Bonus 3D CBCT Volumetric Extension:** Accepts 3D CBCT volumes (`.nii.gz`, `.nii`, or `.zip` 3D DICOM/NIfTI series), segments 5 anatomical structures (`maxilla_upper_skull`, `mandible`, `upper_teeth`, `lower_teeth`, `mandibular_canal`) via **pretrained `DentalSegmentator` (`nnU-Net 3d_fullres`, CC BY 4.0, used as-is)**, computes exact 3D Euclidean millimeter clearance between lower teeth roots and the left/right mandibular canal (`0.71 mm` right / `1.58 mm` left on `PostDentalSurgery`; `2.12 mm` right / `1.50 mm` left on `PreDentalSurgery`), and exports interactive `.glb` / `.stl` 3D meshes rendered directly in the browser (`<model-viewer>` / WebGL).
+- **Bonus 3D CBCT Volumetric Extension:** Accepts raw 3D CBCT (`.nii`, `.nii.gz`, or a ZIP with a 3D DICOM series/NIfTI pair), pre-segmented 5-class NIfTI label maps, and ZIP bundles containing a volume + label map. Raw volumes run **pretrained `DentalSegmentator` (`nnU-Net 3d_fullres` fold_0, CC BY 4.0, used as-is)** when `nnunetv2` and the Zenodo weights are installed; otherwise the request returns HTTP 503 with setup instructions and no demo data is substituted. The service computes the minimum 3D voxel-surface distance in millimetres between lower teeth (label 4) and the left/right mandibular canal (label 5), and exports per-upload `.glb` / `.stl` meshes for browser review.
+- **Honest 3D Provenance:** Every CBCT response reports `segmentation_source` (`model_inference`, `uploaded_labelmap`, `demo_reference_labelmap`, or `demo_model_labelmap`), whether inference ran in that request, per-stage timings, and process/GPU memory. A 2D OPG response explicitly reports `three_d_available: false`.
 - **Multi-Modality Ingestion:** Supports standard images (PNG, JPEG), single-frame 2D DICOM (`.dcm`) with Modality LUT + VOI LUT windowing and MONOCHROME1 polarity inversion, and 3D NIfTI / zipped 3D DICOM series with automatic patient de-identification.
 - **Input Validity Gate:** Identifies and rejects non-dental, blank, or text-document uploads before inference.
 - **Decision Support API & UI:** Unified FastAPI backend (`POST /analyze` and `POST /analyze/sample_cbct`) and interactive web UI for 2D & 3D clinician review.
@@ -28,6 +29,8 @@ An end-to-end clinical decision-support prototype for automated finding detectio
 - **Detector:** Faster R-CNN with ResNet-50 FPN V2 backbone initialized from COCO pretrained weights (`FasterRCNN_ResNet50_FPN_V2_Weights.COCO_V1`). 43.27M parameters (43.05M trainable).
 - **Commercial Licensing:** Permissive **BSD-3-Clause** licensing across PyTorch / torchvision (avoiding the AGPL copyleft viral constraints of Ultralytics YOLO).
 - **Evaluation Discipline:** Low score floor (`box_score_thresh=0.001`, `rpn_score_thresh=0.0`) inside detector to ensure unbiased COCO mAP curves before deployment thresholding (selected operating threshold: `0.70`).
+- **3D Routing & Provenance:** CBCT routing is content-based (gzip/NIfTI header or ZIP members), not filename-only. Raw volumes require installed weights; pre-segmented label maps are processed directly; demo bundles are identified server-side. A `provenance.json` supplied by an uploader is echoed as **unverified** and can never set `segmentation_source` to `model_inference`.
+- **Concurrency & Fail-Closed Behavior:** CBCT jobs are serialized with a process lock because a sliding-window nnU-Net run needs several GB of RAM/VRAM. Missing weights raise HTTP 503 instead of falling back to a sample.
 
 ---
 
@@ -68,6 +71,43 @@ Open **http://localhost:8000** in your browser.
 docker build -t viscan-opg .
 docker run -p 8000:8000 viscan-opg
 ```
+
+The default image runs 2D OPG, pre-segmented CBCT label maps, and the demo
+bundles. Raw CBCT inference is opt-in:
+
+```bash
+docker build --build-arg INSTALL_CBCT=true -t viscan-opg-cbct .
+docker run -p 8000:8000 \
+  -v /path/to/cbct_weights:/cbct_weights:ro \
+  -e VISCAN_CBCT_WEIGHTS_DIR=/cbct_weights \
+  viscan-opg-cbct
+
+# Or with the compose profile:
+docker compose --profile cbct up viscan-cbct
+```
+
+### Option C: Enable Live Raw-CBCT Inference Locally
+
+```bash
+pip install -r requirements-cbct.txt
+
+# Download Dataset112_DentalSegmentator_v100.zip from
+# https://doi.org/10.5281/zenodo.10829675 (CC BY 4.0) and extract it.
+export VISCAN_CBCT_WEIGHTS_DIR=/path/to/extracted/folder   # contains dataset.json + fold_0/checkpoint_final.pth
+
+python app.py
+```
+
+Check readiness without uploading a scan:
+
+```bash
+curl http://localhost:8000/health
+```
+
+`/health` reports `cbct.ready`, `nnunetv2_installed`, `weights_dir_configured`,
+`model_folder_found`, and a human-readable `reason` (filesystem paths are not
+exposed). When `ready` is false, raw CBCT uploads return HTTP 503; pre-segmented
+label maps and demo scans still work.
 
 ---
 
@@ -136,43 +176,85 @@ curl -X POST "http://localhost:8000/analyze?confidence_threshold=0.70" \
   "summary": "2 findings: 1 deep caries, 1 periapical lesion.",
   "original_image_url": "/results/opg_a1b2c3d4_original.png",
   "annotated_image_url": "/results/opg_a1b2c3d4_annotated.png",
+  "three_d_available": false,
+  "three_d_note": "No 3D model for a 2D OPG: a panoramic radiograph contains no volumetric data. Upload a CBCT volume for 3D segmentation.",
   "disclaimer": "AI-assisted findings for dentist review. Not a diagnosis."
 }
 ```
 
 ### 3D CBCT Analysis (`POST /analyze` or `POST /analyze/sample_cbct`)
-Accepts `.nii.gz`, `.nii`, or `.zip` (3D DICOM series or NIfTI bundle) and returns 5-class 3D segmentation statistics, 3D mandibular canal nerve clearance findings (`mm` + 3D voxel bounding boxes), orthogonal slice previews, and interactive `.glb` / `.stl` mesh URLs:
+
+The service accepts three CBCT input modes and reports which one produced the labels:
+
+| Input | Label source | `segmentation_source` | Inference in this request |
+|---|---|---|---|
+| Raw `.nii` / `.nii.gz` / ZIP with a 3D DICOM series or volume-only NIfTI | DentalSegmentator nnU-Net (requires optional stack + weights) | `model_inference` | `true` |
+| 5-class NIfTI label map, or ZIP containing a volume + label map | Labels supplied by the uploader | `uploaded_labelmap` | `false` |
+| `POST /analyze/sample_cbct?scan=PostDentalSurgery` / `PreDentalSurgery` | Server-side demo bundle | `demo_reference_labelmap` (Post) or `demo_model_labelmap` (Pre) | `false` |
+
 ```bash
+# Raw volume, live inference (503 if the optional stack is not ready)
+curl -X POST "http://localhost:8000/analyze" \
+     -F "file=@my_cbct.nii.gz"
+
+# Pre-segmented label map
 curl -X POST "http://localhost:8000/analyze" \
      -F "file=@samples/cbct/PostDentalSurgery_Segmentation.nii.gz"
+
+# Bundled demo (server labels its provenance)
+curl -X POST "http://localhost:8000/analyze/sample_cbct?scan=PostDentalSurgery"
 ```
-**Response (3D CBCT JSON):**
+
+**Example response** (trimmed from [`samples/cbct/PostDentalSurgery_cbct_report.json`](samples/cbct/PostDentalSurgery_cbct_report.json); the mesh geometry and images are generated per request):
 ```json
 {
   "image_id": "PostDentalSurgery",
-  "modality": "CBCT_3D",
+  "modality": "CBCT",
+  "segmentation_source": "demo_reference_labelmap",
+  "segmentation_source_detail": "Shipped demo labels are the official SlicerDentalSegmentator reference mask ...",
+  "demo": true,
   "model": {
-    "name": "dentalsegmentator_nnunet_3d_fullres",
-    "version": "1.0.0",
-    "source": "Pretrained as-is (Dot et al., Journal of Dentistry 2024, Zenodo 10829675, CC BY 4.0)"
+    "name": "DentalSegmentator_nnUNetv2_3d_fullres",
+    "version": "v1.0.0 (Dataset112_DentalSegmentator, Dot et al. 2024)",
+    "weights_doi": "10.5281/zenodo.10829675",
+    "license": "CC BY 4.0",
+    "pretrained_as_is": true,
+    "inference_ran_in_this_request": false
   },
-  "volume_shape": [360, 360, 330],
-  "voxel_spacing_mm": [0.5, 0.5, 0.5],
-  "inference_ms": 131407.1,
-  "postprocess_ms": 5816.3,
-  "mesh_generation_ms": 938.6,
-  "memory_mb": {
-    "gpu_peak_allocated_mb": 4936.0,
-    "cpu_rss_mb": 2641.8
+  "inference_ms": 9473.5,
+  "timings_ms": {
+    "load": 1871.9,
+    "segmentation": null,
+    "postprocess": 2294.6,
+    "rendering": 246.1,
+    "meshing": 5061.0,
+    "total": 9473.5
+  },
+  "memory": {
+    "process_rss_before_mb": 345.2,
+    "process_rss_after_mb": 598.4,
+    "process_rss_delta_mb": 253.2,
+    "gpu_peak_allocated_mb": null
+  },
+  "volume_metadata": {
+    "dimensions_voxels": [360, 360, 330],
+    "spacing_mm": [0.5, 0.5, 0.5],
+    "has_grayscale_volume": true,
+    "segmented_structures": {
+      "mandible": {"label_id": 2, "voxel_count": 309895, "volume_cm3": 38.74, "bbox_3d_voxel": [71, 66, 40, 297, 234, 207]},
+      "mandibular_canal": {"label_id": 5, "voxel_count": 6655, "volume_cm3": 0.83, "bbox_3d_voxel": [98, 97, 61, 265, 196, 140]}
+    }
   },
   "findings": [
     {
       "class": "mandibular_canal_to_lower_teeth_clearance",
       "hemimandible": "right",
       "min_distance_mm": 0.71,
-      "closest_lower_tooth_voxel": [119, 151, 89],
-      "closest_canal_voxel": [118, 151, 88],
-      "bbox_3d_voxel": [108, 141, 78, 129, 161, 99]
+      "closest_lower_tooth_voxel": [119, 153, 90],
+      "closest_canal_voxel": [118, 153, 89],
+      "closest_lower_tooth_mm": [59.5, 76.5, 45.0],
+      "closest_canal_mm": [59.0, 76.5, 44.5],
+      "bbox_3d_voxel": [108, 143, 79, 129, 163, 100]
     },
     {
       "class": "mandibular_canal_to_lower_teeth_clearance",
@@ -180,13 +262,41 @@ curl -X POST "http://localhost:8000/analyze" \
       "min_distance_mm": 1.58,
       "closest_lower_tooth_voxel": [235, 132, 75],
       "closest_canal_voxel": [236, 132, 72],
+      "closest_lower_tooth_mm": [117.5, 66.0, 37.5],
+      "closest_canal_mm": [118.0, 66.0, 36.0],
       "bbox_3d_voxel": [225, 122, 62, 246, 142, 85]
     }
   ],
+  "summary": "CBCT 5-structure segmentation complete (Maxilla, Mandible, Upper Teeth, Lower Teeth, Mandibular Canal). Right lower teeth-to-mandibular canal minimum clearance: 0.71 mm; Left lower teeth-to-mandibular canal minimum clearance: 1.58 mm.",
+  "original_image_url": "/results/PostDentalSurgery_cbct_original.png",
+  "annotated_image_url": "/results/PostDentalSurgery_cbct_ortho.png",
   "mesh_glb_url": "/results/PostDentalSurgery_scene.glb",
+  "mesh_stl_urls": {
+    "mandible": "/results/PostDentalSurgery_mandible.stl"
+  },
+  "three_d_available": true,
   "disclaimer": "AI-assisted findings for dentist review. Not a diagnosis."
 }
 ```
+
+> The timing/memory values above are for a pre-segmented demo bundle on CPU, with
+> no nnU-Net stage. External Kaggle Tesla T4 measurements for the full model run
+> (131.4 s inference, 4,936 MB peak VRAM) and the Post model-vs-reference Dice
+> are recorded in [`samples/cbct/PROVENANCE.md`](samples/cbct/PROVENANCE.md).
+
+#### 3D limitations
+
+- The distance is a minimum voxel-surface Euclidean distance between label 4 and
+  label 5 after 60 mm³ island filtering; it inherits the 0.5 mm voxel grid and the
+  segmentation error of the label map. It is not a substitute for nerve tracing.
+- The demo `PostDentalSurgery` labels are the published reference mask, not a model
+  prediction; the demo `PreDentalSurgery` labels are model output without a
+  reference mask. Both are disclosed per request.
+- DICOM ZIP ingestion strips patient tags and keeps only voxels and spacing; it
+  sorts slices along the acquisition normal and does not resample oblique gantry
+  tilt.
+- No claim is made that the two demo volumes belong to the same patient or that
+  the Pre/Post volume differences reflect a clinical outcome.
 
 ---
 
@@ -217,10 +327,24 @@ Computes:
 
 ---
 
-## 7. Testing
+## 7. Sample Artifacts
+
+- **2D OPG:** `samples/sample_01..05_*` each contain the input PNG, the annotated PNG, and the exact `/analyze` JSON at threshold `0.70`. Regenerate with `python generate_samples.py --weights checkpoints/best_model.pth --images <five OPGs> --names sample_01_val_1 sample_02_val_10 sample_03_val_11 sample_04_val_14 sample_05_val_21 --output samples`.
+- **3D CBCT:** `samples/cbct/` contains the two demo bundles, their MPR previews, 5 STLs, a GLB scene, the exact demo JSON, and [`PROVENANCE.md`](samples/cbct/PROVENANCE.md) with label sources, bundle hashes, external Kaggle measurements, and local demo timings. Regenerate with `python build_cbct_bundles.py && python generate_cbct_samples.py`.
+
+---
+
+## 8. Testing
 
 Run automated unit and integration tests:
 ```bash
 pytest tests/ -v
 ```
-All tests verify DICOM windowing, MONOCHROME1 handling, model predictor heads, coordinate bounds clipping, and API schemas.
+The suite covers DICOM windowing/MONOCHROME1 handling, coordinate clipping, API
+schemas, NIfTI round-tripping, analytical nerve distances, STL/GLB export, and
+the CBCT behavior described above: content-based routing, 2D responses never
+advertising 3D, uploaded label maps never claiming inference, uploaded
+`provenance.json` being untrusted, server-side demo provenance, DICOM patient-tag
+stripping, raw CBCT returning 503 without weights, and a stubbed live-inference
+path producing per-upload meshes. The stubbed test proves wiring and provenance,
+not nnU-Net accuracy.

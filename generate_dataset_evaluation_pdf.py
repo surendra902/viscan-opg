@@ -134,6 +134,15 @@ body_style = ParagraphStyle(
     spaceAfter=3,
 )
 
+small_style = ParagraphStyle(
+    "SmallNote",
+    parent=styles["Normal"],
+    fontName="Helvetica-Oblique",
+    fontSize=6.8,
+    leading=9,
+    textColor=MUTED_TEXT,
+)
+
 table_header_style = ParagraphStyle(
     "TableHeader",
     parent=styles["Normal"],
@@ -703,7 +712,8 @@ story.append(Paragraph(
     "Following completion of the 2D OPG pipeline, the same application (<code>POST /analyze</code>) and UI were extended to process 3D CBCT scans "
     "(<code>.nii.gz</code>, <code>.nii</code>, and zipped 3D DICOM/NIfTI series). We explicitly disclose that <b>DentalSegmentator</b> "
     "(<code>Dataset112_DentalSegmentator_v100</code>, Dot et al., <i>Journal of Dentistry</i> 2024, Zenodo DOI <code>10.5281/zenodo.10829675</code>, "
-    "License: <b>CC BY 4.0</b>, <code>nnUNetTrainer__nnUNetPlans__3d_fullres</code>, <code>fold_0</code>, trained on 470 CT/CBCT scans) is used <b>pretrained as-is</b>.",
+    "License: <b>CC BY 4.0</b>, <code>nnUNetTrainer__nnUNetPlans__3d_fullres</code>, <code>fold_0</code>; the authors report training on 470 CT/CBCT scans) is used <b>pretrained as-is</b> with no fine-tuning. "
+    "The Hugging Face Space is CPU-only without nnU-Net weights, so raw CBCT uploads return <b>HTTP 503</b> by design; bundled pre-segmented demos and uploaded label maps still work, and no demo data is substituted.",
     body_style
 ))
 story.append(Spacer(1, 3))
@@ -712,18 +722,18 @@ cbct_table_data = [
     [
         Paragraph("Class ID", table_header_style),
         Paragraph("Anatomical Structure", table_header_style),
-        Paragraph("Post-Filtered Voxels", table_header_style),
+        Paragraph("Voxels (Demo Reference Mask)", table_header_style),
         Paragraph("Volume (cm³)", table_header_style),
-        Paragraph("3D Dice vs. Reference", table_header_style),
+        Paragraph("Model Dice vs. Reference", table_header_style),
         Paragraph("Marching Cubes Vertices", table_header_style),
         Paragraph("Marching Cubes Faces", table_header_style),
     ],
-    [Paragraph("1", table_cell_center), Paragraph("<b>maxilla_upper_skull</b>", table_cell_bold), Paragraph("1,476,019", table_cell_center), Paragraph("184.50", table_cell_center), Paragraph("<b>0.9768</b>", table_cell_bold_center), Paragraph("181,032", table_cell_center), Paragraph("366,752", table_cell_center)],
-    [Paragraph("2", table_cell_center), Paragraph("<b>mandible</b>", table_cell_bold), Paragraph("310,556", table_cell_center), Paragraph("38.82", table_cell_center), Paragraph("<b>0.9849</b>", table_cell_bold_center), Paragraph("35,515", table_cell_center), Paragraph("71,934", table_cell_center)],
-    [Paragraph("3", table_cell_center), Paragraph("<b>upper_teeth</b>", table_cell_bold), Paragraph("75,590", table_cell_center), Paragraph("9.45", table_cell_center), Paragraph("<b>0.9867</b>", table_cell_bold_center), Paragraph("9,610", table_cell_center), Paragraph("19,240", table_cell_center)],
-    [Paragraph("4", table_cell_center), Paragraph("<b>lower_teeth</b>", table_cell_bold), Paragraph("62,663", table_cell_center), Paragraph("7.83", table_cell_center), Paragraph("<b>0.9745</b>", table_cell_bold_center), Paragraph("8,530", table_cell_center), Paragraph("17,068", table_cell_center)],
-    [Paragraph("5", table_cell_center), Paragraph("<b>mandibular_canal</b>", table_cell_bold), Paragraph("6,063", table_cell_center), Paragraph("0.76", table_cell_center), Paragraph("<b>0.8968</b>", table_cell_bold_center), Paragraph("1,736", table_cell_center), Paragraph("3,456", table_cell_center)],
-    [Paragraph("—", table_cell_center), Paragraph("<b>Total / Mean</b>", table_cell_bold), Paragraph("<b>1,930,891</b>", table_cell_bold_center), Paragraph("<b>241.36</b>", table_cell_bold_center), Paragraph("<b>0.9639</b>", table_cell_bold_center), Paragraph("<b>236,423</b>", table_cell_bold_center), Paragraph("<b>478,450</b>", table_cell_bold_center)],
+    [Paragraph("1", table_cell_center), Paragraph("<b>maxilla_upper_skull</b>", table_cell_bold), Paragraph("1,446,339", table_cell_center), Paragraph("180.79", table_cell_center), Paragraph("<b>0.9768</b>", table_cell_bold_center), Paragraph("706,776", table_cell_center), Paragraph("353,388", table_cell_center)],
+    [Paragraph("2", table_cell_center), Paragraph("<b>mandible</b>", table_cell_bold), Paragraph("309,895", table_cell_center), Paragraph("38.74", table_cell_center), Paragraph("<b>0.9849</b>", table_cell_bold_center), Paragraph("141,192", table_cell_center), Paragraph("70,596", table_cell_center)],
+    [Paragraph("3", table_cell_center), Paragraph("<b>upper_teeth</b>", table_cell_bold), Paragraph("75,300", table_cell_center), Paragraph("9.41", table_cell_center), Paragraph("<b>0.9867</b>", table_cell_bold_center), Paragraph("153,088", table_cell_center), Paragraph("76,544", table_cell_center)],
+    [Paragraph("4", table_cell_center), Paragraph("<b>lower_teeth</b>", table_cell_bold), Paragraph("63,081", table_cell_center), Paragraph("7.89", table_cell_center), Paragraph("<b>0.9745</b>", table_cell_bold_center), Paragraph("139,056", table_cell_center), Paragraph("69,528", table_cell_center)],
+    [Paragraph("5", table_cell_center), Paragraph("<b>mandibular_canal</b>", table_cell_bold), Paragraph("6,655", table_cell_center), Paragraph("0.83", table_cell_center), Paragraph("<b>0.8968</b>", table_cell_bold_center), Paragraph("29,792", table_cell_center), Paragraph("14,896", table_cell_center)],
+    [Paragraph("—", table_cell_center), Paragraph("<b>Total / Mean</b>", table_cell_bold), Paragraph("<b>1,901,270</b>", table_cell_bold_center), Paragraph("<b>237.66</b>", table_cell_bold_center), Paragraph("<b>0.9639</b>", table_cell_bold_center), Paragraph("<b>1,169,904</b>", table_cell_bold_center), Paragraph("<b>584,952</b>", table_cell_bold_center)],
 ]
 
 cbct_table = Table(cbct_table_data, colWidths=[0.6 * inch, 1.5 * inch, 1.15 * inch, 0.9 * inch, 1.15 * inch, 1.15 * inch, 1.15 * inch])
@@ -734,20 +744,26 @@ cbct_table.setStyle(TableStyle([
     ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, BG_LIGHT]),
 ]))
 story.append(cbct_table)
+story.append(Paragraph(
+    "Voxel counts, volumes and mesh counts are from the reference label map shipped in the Post demo bundle. "
+    "The Dice column compares a separate model prediction with that reference; the demo request runs no inference.",
+    small_style,
+))
 story.append(Spacer(1, 4))
 
 cbct_summary_boxes = [
     [
-        Paragraph("<b>3D Clinical Findings (<code>PostDentalSurgery</code>, 360×360×330 @ 0.5 mm)</b><br/>"
-                  "• <b>Finding Type:</b> <code>mandibular_canal_to_lower_teeth_clearance</code> (<code>cKDTree</code> in mm)<br/>"
-                  "• <b>Right Hemimandible:</b> <b>0.71 mm</b> (&lt;1.0 mm surgical alert; tooth voxel <code>[119,151,89]</code> to canal <code>[118,151,88]</code>, <code>bbox_3d=[108,141,78,129,161,99]</code>)<br/>"
-                  "• <b>Left Hemimandible:</b> <b>1.58 mm</b> (close proximity; tooth voxel <code>[235,132,75]</code> to canal <code>[236,132,72]</code>, <code>bbox_3d=[225,122,62,246,142,85]</code>)<br/>"
-                  "• <b>3D Browser View &amp; Export:</b> Interactive <code>&lt;model-viewer&gt;</code> WebGL <code>.glb</code> scene (<code>12.08 MB</code>) + 5 binary <code>.stl</code> files", body_style),
-        Paragraph("<b>Measured Memory, Latency &amp; Production Design (Kaggle Tesla T4 GPU)</b><br/>"
+        Paragraph("<b>3D Finding (<code>PostDentalSurgery</code>, 360×360×330 @ 0.5 mm)</b><br/>"
+                  "• <b>Finding Type:</b> <code>mandibular_canal_to_lower_teeth_clearance</code> (minimum label-surface distance in mm)<br/>"
+                  "• <b>Side A (voxel x &lt; midpoint):</b> <b>0.71 mm</b> (tooth voxel <code>[119,153,90]</code> to canal <code>[118,153,89]</code>, <code>bbox_3d=[108,143,79,129,163,100]</code>)<br/>"
+                  "• <b>Side B (voxel x ≥ midpoint):</b> <b>1.58 mm</b> (tooth voxel <code>[235,132,75]</code> to canal <code>[236,132,72]</code>, <code>bbox_3d=[225,122,62,246,142,85]</code>)<br/>"
+                  "• <b>Caveat:</b> side is a volume-side index, not verified patient laterality; this is not a nerve-centreline trace or a validated risk score.<br/>"
+                  "• <b>3D Browser View &amp; Export:</b> Interactive <code>&lt;model-viewer&gt;</code> WebGL <code>.glb</code> scene (<code>35.1 MB</code> for Post) + 5 binary <code>.stl</code> files", body_style),
+        Paragraph("<b>Measured Memory &amp; Latency (Kaggle Tesla T4 GPU)</b><br/>"
                   "• <b>3D Inference (252 tiles):</b> <code>131,407.1 ms</code> (<code>131.41 s</code>) | <b>Init:</b> <code>2,131.9 ms</code><br/>"
                   "• <b>Post-Processing + cKDTree:</b> <code>5,816.3 ms</code> | <b>Meshing (.stl/.glb):</b> <code>938.6 ms</code><br/>"
                   "• <b>Peak GPU VRAM:</b> <code>4,936.0 MB</code> (<code>4.94 GB</code>) | <b>CPU RSS:</b> <code>2,641.8 MB</code><br/>"
-                  "• <b>Production Architecture:</b> Presigned S3/GCS upload + edge DICOM de-ID → Async Redis/Celery queue (<code>202 Accepted</code> + WebSockets) → Pre-warmed L4/T4 GPU pool with TensorRT FP16 tile batching (~20s) → Draco <code>.glb</code> CDN", body_style),
+                  "• <b>Production Approach (proposal, not benchmarked):</b> Presigned S3/GCS upload + edge DICOM de-ID → async Redis/Celery queue (<code>202 Accepted</code> + WebSockets) → pre-warmed GPU workers with serialized jobs; TensorRT/FP16 and tile batching are possible but unmeasured; Draco <code>.glb</code> CDN", body_style),
     ]
 ]
 cbct_box_table = Table(cbct_summary_boxes, colWidths=[3.8 * inch, 3.8 * inch])

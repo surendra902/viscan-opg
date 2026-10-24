@@ -12,6 +12,7 @@ nibabel>=5.1.0
 scipy>=1.11.0
 scikit-image>=0.21.0
 trimesh>=4.0.0
+psutil>=5.9.0
 
 # Backend & Web Service
 fastapi>=0.100.0

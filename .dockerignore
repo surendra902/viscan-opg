@@ -1,0 +1,12 @@
+.git
+.gitignore
+.pytest_cache
+__pycache__
+*.pyc
+results/
+checkpoints/
+data/
+_tmp/
+hf_space/
+*.pth
+*.pt

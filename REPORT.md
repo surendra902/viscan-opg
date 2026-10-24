@@ -10,7 +10,7 @@
 
 ## 1. Executive Summary
 
-This project delivers an end-to-end clinical decision-support prototype for **2D dental panoramic radiographs (OPGs)** and extends the same unified application (`POST /analyze`) to **3D Cone-Beam Computed Tomography (CBCT)** volumes (`.nii.gz`, `.nii`, and zipped 3D DICOM/NIfTI series). For 2D OPGs, the system ingests PNG, JPEG, and single-frame 2D DICOM (`.dcm`) formats, detects four dental finding classes (`impacted_tooth`, `caries`, `periapical_lesion`, `deep_caries`), and produces class-colored visual annotations and deterministic structured JSON reports. For 3D CBCT scans, the system segments 5 maxillofacial structures (`maxilla_upper_skull`, `mandible`, `upper_teeth`, `lower_teeth`, `mandibular_canal`), computes exact 3D physical millimeter clearance between the lower teeth roots and the left/right mandibular canal (`inferior alveolar nerve`), renders 4-panel multi-planar reconstructions (Axial, Coronal, Sagittal, 3D MIP), and exports interactive 3D `.glb` / `.stl` surface meshes for in-browser review.
+This project delivers an end-to-end clinical decision-support prototype for **2D dental panoramic radiographs (OPGs)** and extends the same unified application (`POST /analyze`) to **3D Cone-Beam Computed Tomography (CBCT)** volumes (`.nii.gz`, `.nii`, and zipped 3D DICOM/NIfTI series). For 2D OPGs, the system ingests PNG, JPEG, and single-frame 2D DICOM (`.dcm`) formats, detects four dental finding classes (`impacted_tooth`, `caries`, `periapical_lesion`, `deep_caries`), and produces class-colored visual annotations and deterministic structured JSON reports. For 3D CBCT scans, the system segments 5 maxillofacial structures (`maxilla_upper_skull`, `mandible`, `upper_teeth`, `lower_teeth`, `mandibular_canal`), computes the minimum 3D voxel-surface distance in millimetres between label 4 (lower teeth) and label 5 (left/right mandibular canal), renders 4-panel multi-planar reconstructions (Axial, Coronal, Sagittal, 3D MIP), and exports per-upload 3D `.glb` / `.stl` surface meshes for in-browser review. Raw-volume inference is optional, fails closed with HTTP 503 when the nnU-Net weights are absent, and every response states whether inference actually ran.
 
 The detector is **Faster R-CNN with a ResNet-50 FPN V2 backbone** (`43,271,528` total parameters; `43,046,184` trainable), initialized from official Torchvision `FasterRCNN_ResNet50_FPN_V2_Weights.COCO_V1` weights and fine-tuned on the DENTEX (MICCAI 2023) benchmark.
 - **Code & Pretrained Backbone License:** **BSD-3-Clause** (permissive, commercial-compatible software architecture).
@@ -231,57 +231,107 @@ Across the 50 held-out test radiographs at $\tau = 0.70$, the detector produced 
 
 ## 11. Bonus Track: 3D CBCT Volumetric Segmentation, Nerve Clearance & Interactive 3D Meshing
 
-Following completion and verification of the end-to-end 2D OPG pipeline, the same FastAPI service (`POST /analyze` in [`service.py`](service.py) and [`cbct_pipeline.py`](cbct_pipeline.py)) and Gradio Hugging Face Space ([`hf_space/app.py`](hf_space/app.py)) were extended to accept 3D CBCT volumes (`.nii.gz`, `.nii`, or `.zip` archives containing a 3D DICOM series or NIfTI pair).
+Following completion and verification of the end-to-end 2D OPG pipeline, the same FastAPI service (`POST /analyze` in [`service.py`](service.py) and [`cbct_pipeline.py`](cbct_pipeline.py)) and the companion Gradio Space were extended to accept 3D CBCT volumes (`.nii`, `.nii.gz`, or `.zip` archives containing a 3D DICOM series or NIfTI pair), pre-segmented 5-class label maps, and ZIP bundles containing a volume plus label map.
+
+The candidate Hugging Face Space runs on CPU without the nnU-Net stack or Zenodo weights. It therefore supports the bundled **pre-segmented** demo scans and user-uploaded label maps, while a raw CBCT upload returns **HTTP 503** with setup instructions by design. Raw-volume inference is available in a local or Docker deployment after installing `requirements-cbct.txt` and pointing `VISCAN_CBCT_WEIGHTS_DIR` at the extracted weights. No demo data is substituted for a failed raw upload.
 
 ### 11.1 Explicit Pretrained Model Disclosure
 - **Model Used:** **`DentalSegmentator`** (`Dataset112_DentalSegmentator_v100.zip`, `229,747,861` bytes, MD5 `b71cd5230168d28a4f71b078265b76be`), published by **Dot et al., *Journal of Dentistry* (2024)**, Zenodo DOI: [`10.5281/zenodo.10829675`](https://zenodo.org/records/10829675), License: **CC BY 4.0**.
-- **Usage Disclosure:** We explicitly disclose that **`DentalSegmentator` (`nnUNetTrainer__nnUNetPlans__3d_fullres`, `fold_0`) is used pretrained as-is** (trained by Dot et al. on 470 multi-center CT and CBCT scans). All engineering in this bonus track focuses on 3D volumetric ingestion, DICOM/NIfTI de-identification, connected-component post-processing, exact 3D Euclidean nerve-to-root distance computation in physical millimeters, Marching Cubes `.stl`/`.glb` surface generation, and interactive browser integration (`<model-viewer>` / Three.js WebGL). Full execution logs are preserved in [`kaggle_cbct_notebook.ipynb`](kaggle_cbct_notebook.ipynb).
+- **Usage Disclosure:** **`DentalSegmentator` (`nnUNetTrainer__nnUNetPlans__3d_fullres`, `fold_0`) is used pretrained as-is**; no fine-tuning was performed. Dot et al. report training on 470 CT/CBCT scans. Engineering in this bonus track covers 3D volumetric ingestion, DICOM/NIfTI de-identification, connected-component post-processing, minimum label-surface distance computation in physical millimetres, Marching Cubes `.stl`/`.glb` surface generation, and browser integration (`<model-viewer>` / Gradio `Model3D`). Notebook execution logs are in [`kaggle_cbct_notebook.ipynb`](kaggle_cbct_notebook.ipynb).
 
-### 11.2 Dual Clinical Benchmark Scans: Pre- & Post-Operative Verification
-To ensure rigorous evaluation without artificial data synthesis, the bonus track provides two genuine, distinct 3D CBCT scans sourced from official `3D Slicer DentalSegmentator` testing data ([`PreDentalSurgery`](samples/cbct/PreDentalSurgery_bundle.zip) and [`PostDentalSurgery`](samples/cbct/PostDentalSurgery_bundle.zip)). These represent authentic pre-operative and post-operative scans of the same patient:
+### 11.2 Two CBCT Demo Scans and Their Label Provenance
+The bonus track ships two distinct CBCT volumes from the paired Pre/Post scans distributed with 3D Slicer's **CBCT Dental Surgery** sample data ([`PreDentalSurgery`](samples/cbct/PreDentalSurgery_bundle.zip) and [`PostDentalSurgery`](samples/cbct/PostDentalSurgery_bundle.zip)). The two volumes share the same acquisition grid, but this report makes no claim that they belong to the same patient or that differences between them are clinically meaningful.
 
-| Clinical Scan Metric | `PreDentalSurgery` (Pre-Op Benchmark) | `PostDentalSurgery` (Post-Op Benchmark) | Clinical Comparison & Significance |
+| Metric (derived from the shipped bundle) | `PreDentalSurgery` | `PostDentalSurgery` | Note |
 |---|:---:|:---:|---|
-| **Volume Shape & Voxel Count** | `360 × 360 × 330` (`42,768,000` voxels) | `360 × 360 × 330` (`42,768,000` voxels) | Same patient geometry; isotropic `0.5 × 0.5 × 0.5 mm` spacing |
-| **Raw Volume NIfTI Size** | `24,422,912` bytes (`24.4 MB`) | `35,173,024` bytes (`35.2 MB`) | Distinct field coverage, soft-tissue boundary, and HU distributions |
-| **Maxilla / Upper Skull Volume** | `909,001` voxels (`113.63 cm³`) | `1,476,019` voxels (`184.50 cm³`) | `PostDentalSurgery` includes superior cranial margins |
-| **Mandible Volume** | `266,188` voxels (`33.27 cm³`) | `310,556` voxels (`38.82 cm³`) | Post-op osteotomy healing, surgical hardware, and remodeling |
-| **Upper Teeth Volume** | `67,160` voxels (`8.39 cm³`) | `75,590` voxels (`9.45 cm³`) | Fully resolved dental crowns and roots |
-| **Lower Teeth Volume** | `55,954` voxels (`6.99 cm³`) | `62,663` voxels (`7.83 cm³`) | Distinguishable root apices adjacent to canal corridor |
-| **Mandibular Canal Volume** | `5,853` voxels (`0.73 cm³`) | `6,063` voxels (`0.76 cm³`) | Bilateral inferior alveolar nerve canals tracked end-to-end |
-| **3D Scene GLB Mesh Size** | `11,164,980` bytes (`11.2 MB`) | `13,191,364` bytes (`13.2 MB`) | Completely independent vertex and face topographies |
-| **5-Class Mean 3D Dice** | `0.9582` vs reference | `0.9639` vs reference | Slicer DentalSegmentator nnU-Net v2 architecture |
+| **Volume shape / spacing** | `360 × 360 × 330` (`42,768,000` voxels) @ `0.5 mm` isotropic | `360 × 360 × 330` (`42,768,000` voxels) @ `0.5 mm` isotropic | Same grid; separate acquisitions |
+| **Raw volume NIfTI size** | `24,422,912` bytes | `35,173,024` bytes | Distinct volumes |
+| **Label source** | DentalSegmentator model output (Kaggle scan-2 run) | Official SlicerDentalSegmentator reference mask | Disclosed per API response |
+| **Maxilla / upper skull** | `909,001` voxels (`113.63 cm³`) | `1,446,339` voxels (`180.79 cm³`) | Post-filter counts |
+| **Mandible** | `266,188` voxels (`33.27 cm³`) | `309,895` voxels (`38.74 cm³`) | Post-filter counts |
+| **Upper teeth** | `67,160` voxels (`8.39 cm³`) | `75,300` voxels (`9.41 cm³`) | Post-filter counts |
+| **Lower teeth** | `55,954` voxels (`6.99 cm³`) | `63,081` voxels (`7.89 cm³`) | Post-filter counts |
+| **Mandibular canal** | `5,853` voxels (`0.73 cm³`) | `6,655` voxels (`0.83 cm³`) | Canal is not island-filtered |
+| **Combined `.glb` scene** | `28,740,768` bytes | `35,101,728` bytes | Regenerated with the current mesh exporter |
+| **Dice vs reference** | Not reported (no reference mask used) | Model prediction vs reference: **0.9639 mean** | Post per-class Dice below; not a Dice of the shipped demo labels |
 
-### 11.3 Clinically Useful 3D Finding & Preoperative Nerve Clearance
-To assist preoperative surgical planning (e.g., mandibular third-molar odontectomy and sagittal split ramus osteotomy), [`cbct_pipeline.py`](cbct_pipeline.py) computes exact 3D Euclidean clearance from the mandibular canal to the nearest lower tooth root per hemimandible via `scipy.spatial.cKDTree`. The two scans show completely distinct, anatomically accurate clearances:
+The Post Dice values were measured in the executed Kaggle notebook by comparing
+the **model prediction** with the official reference mask. They are reproduced
+here only as an external model check; the label map shipped in the Post demo
+bundle is the reference mask itself. Per class: `maxilla_upper_skull` `0.9768`,
+`mandible` `0.9849`, `upper_teeth` `0.9867`, `lower_teeth` `0.9745`,
+`mandibular_canal` `0.8968`. Full provenance and bundle hashes are in
+[`samples/cbct/PROVENANCE.md`](samples/cbct/PROVENANCE.md).
 
-1. **`PreDentalSurgery` Findings (Pre-Operative Baseline):**
-   - **Right Hemimandible:** **`min_distance_mm = 2.12 mm`** (`> 2.0 mm` safe clearance zone) between closest lower tooth `[118, 172, 72]` (`[59.0, 86.0, 36.0] mm`) and canal `[115, 172, 69]` (`[57.5, 86.0, 34.5] mm`).
-   - **Left Hemimandible:** **`min_distance_mm = 1.50 mm`** (`1.0–2.0 mm` close proximity caution) between closest lower tooth `[234, 148, 59]` (`[117.0, 74.0, 29.5] mm`) and canal `[234, 148, 56]` (`[117.0, 74.0, 28.0] mm`).
+### 11.3 3D Finding: Mandibular Canal-to-Lower-Teeth Distance
+[`cbct_pipeline.py`](cbct_pipeline.py) extracts the surfaces of label 4 (lower
+teeth) and label 5 (mandibular canal) with one-voxel erosion, converts surviving
+voxel coordinates to physical millimetres using the NIfTI spacing, and queries the
+nearest canal surface point for every tooth surface point with
+`scipy.spatial.cKDTree`. It does the same separately for the two halves of the
+volume and reports the minimum per half. The result is the minimum 3D
+voxel-surface distance on the 0.5 mm grid, not a centreline nerve trace or a
+validated surgical risk score.
 
-2. **`PostDentalSurgery` Findings (Post-Operative Status):**
-   - **Right Hemimandible:** **`min_distance_mm = 0.71 mm`** (`< 1.0 mm` high-proximity alert) between closest lower tooth `[119, 153, 90]` (`[59.5, 76.5, 45.0] mm`) and canal `[118, 153, 89]` (`[59.0, 76.5, 44.5] mm`).
-   - **Left Hemimandible:** **`min_distance_mm = 1.58 mm`** (`1.0–2.0 mm` close proximity) between closest lower tooth `[235, 132, 75]` (`[117.5, 66.0, 37.5] mm`) and canal `[236, 132, 72]` (`[118.0, 66.0, 36.0] mm`).
+1. **`PreDentalSurgery` (labels from model output):**
+   - **Side A (`x < midpoint`):** `2.12 mm` between lower-tooth voxel `[118, 172, 72]` (`[59.0, 86.0, 36.0] mm`) and canal voxel `[115, 172, 69]` (`[57.5, 86.0, 34.5] mm`).
+   - **Side B (`x ≥ midpoint`):** `1.50 mm` between lower-tooth voxel `[234, 148, 59]` (`[117.0, 74.0, 29.5] mm`) and canal voxel `[234, 148, 56]` (`[117.0, 74.0, 28.0] mm`).
 
-![3D CBCT Multi-Planar Reconstruction (Post-Op)](assets/eval/cbct_ortho_preview.png)
-![3D CBCT Multi-Planar Reconstruction (Pre-Op)](assets/eval/cbct_ortho_pre_preview.png)
+2. **`PostDentalSurgery` (labels from the reference mask):**
+   - **Side A (`x < midpoint`):** `0.71 mm` between lower-tooth voxel `[119, 153, 90]` (`[59.5, 76.5, 45.0] mm`) and canal voxel `[118, 153, 89]` (`[59.0, 76.5, 44.5] mm`).
+   - **Side B (`x ≥ midpoint`):** `1.58 mm` between lower-tooth voxel `[235, 132, 75]` (`[117.5, 66.0, 37.5] mm`) and canal voxel `[236, 132, 72]` (`[118.0, 66.0, 36.0] mm`).
 
-### 11.4 Measured Memory Use, Inference Latency & Production Architecture for Large CBCT Volumes
+"Side A/B" is deliberately not called patient left/right: the code splits at the
+voxel x midpoint and does not map the NIfTI orientation matrix to patient
+laterality. The API field is still named `hemimandible` for schema stability, but
+the side must be verified against scanner orientation before any clinical use. No
+diagnostic threshold is applied; interpreting 0.71 mm as "high risk" or 2.12 mm as
+"safe" would require clinical validation that this prototype does not provide.
 
-#### Empirical Benchmark on Kaggle Tesla T4 GPU (`PostDentalSurgery`, `360 × 360 × 330` voxels)
-| Stage / Resource Metric | Measured Value | Hardware / Execution Notes |
+![3D CBCT Multi-Planar Reconstruction (Post)](assets/eval/cbct_ortho_preview.png)
+![3D CBCT Multi-Planar Reconstruction (Pre)](assets/eval/cbct_ortho_pre_preview.png)
+
+### 11.4 Measured Memory, Latency, and Production Approach
+
+#### External full-model run (Kaggle Tesla T4, `PostDentalSurgery`, `360 × 360 × 330`)
+| Stage / Resource | Measured Value | Notes |
 |---|:---:|---|
-| **GPU Hardware Platform** | **NVIDIA Tesla T4 (14.56 GB VRAM)** | 4 vCPUs, 31.35 GB System RAM, PyTorch `2.11.0+cu128` |
-| **Model Checkpoint Initialization** | **2,131.9 ms (2.13 s)** | Loading `checkpoint_final.pth` (`fold_0`) onto `cuda:0` |
-| **3D Sliding-Window Inference (`252` tiles)** | **131,407.1 ms (131.41 s)** | `3d_fullres` Gaussian-weighted patch aggregation (`step_size = 0.5`) + NIfTI export |
-| **3D Post-Processing & `cKDTree` Distance** | **5,816.3 ms (5.82 s)** | $60\text{ mm}^3$ island filtering (`scipy.ndimage.label`) + physical millimeter nerve distance |
-| **3D Marching Cubes Meshing (`.stl` + `.glb`)** | **938.6 ms (0.94 s)** | 5 binary `.stl` meshes + combined `12.08 MB` glTF 2.0 `.glb` scene (`step_size = 2`) |
-| **Peak GPU VRAM Allocated / Reserved** | **4,936.0 MB / 5,112.0 MB** | `4.94 GB` peak VRAM allocated during 3D patch aggregation |
-| **Process CPU RSS Memory** | **2,641.8 MB (+1,270.8 MB delta)** | Host RAM required for full-resolution 3D probabilities and volume buffers |
+| GPU platform | NVIDIA Tesla T4, 14.56 GB VRAM | 4 vCPUs, 31.35 GB system RAM, PyTorch `2.11.0+cu128` |
+| Checkpoint initialization | 2,131.9 ms | `checkpoint_final.pth` (`fold_0`) |
+| 3D sliding-window inference | **131,407.1 ms (131.4 s)** | 252 tiles, `step_size = 0.5`, Gaussian weighting, no mirroring |
+| Post-processing + `cKDTree` | 5,816.3 ms | 60 mm³ island filter + distance |
+| Marching Cubes meshing | 938.6 ms | 5 STL meshes + GLB scene |
+| Peak GPU VRAM allocated | **4,936.0 MB** | From `torch.cuda.max_memory_allocated()` |
+| Process CPU RSS | 2,641.8 MB (+1,270.8 MB) | Full-resolution probability buffers |
 
-#### How We Would Run Large 3D CBCT Volumes in Production
-Because clinical CBCT scans are `100–500 MB` (`40M–125M` voxels) and require `~5 GB` GPU VRAM and `~20–130 s` of 3D sliding-window compute, running synchronous inference inside a web worker causes HTTP timeouts and OOM crashes. A production deployment separates ingestion, GPU inference, and 3D visualization into four stages:
-1. **Direct Presigned Object-Store Ingestion & Edge De-Identification:** The browser uploads `.nii.gz` or zipped DICOM series directly to S3/GCS via multipart presigned URLs, stripping DICOM patient tags (`PatientName`, `PatientID`, `BirthDate`, `InstitutionName`) before storage.
-2. **Asynchronous Job Queue (`POST /jobs/cbct` $\rightarrow$ `202 Accepted`):** The FastAPI gateway enqueues a job payload into Redis / Celery (or Cloud Tasks) and streams progress events (`queued` $\rightarrow$ `preprocessing` $\rightarrow$ `gpu_sliding_window` $\rightarrow$ `meshing` $\rightarrow$ `completed`) to the UI over WebSockets/SSE.
-3. **Pre-Warmed GPU Worker Pool with TensorRT / FP16 Batching:** Dedicated GPU workers (e.g., NVIDIA L4 24 GB or T4 16 GB on Kubernetes with KEDA queue-depth autoscaling) keep `DentalSegmentator` weights pinned in VRAM (`0 ms` cold start) and compile the 3D U-Net encoder/decoder with TensorRT FP16, batching `4–8` sliding-window 3D tiles per forward pass to reduce 252-tile inference latency from `131 s` on T4 down to `~18–25 s` on L4.
-4. **Draco-Compressed `.glb` CDN Delivery:** Marching Cubes meshes are decimated/Draco-compressed (`12 MB` $\rightarrow$ `~1.5 MB`) and served via CDN with immutable content hashes for zero-latency 60 FPS WebGL rendering in `<model-viewer>` / `vtk.js` / `three.js`.
+The Pre scan's Kaggle run recorded `115,902.3 ms` inference and `4,724.9 MB` peak
+VRAM in the bundle's `run_metrics.json`.
+
+#### Measured demo-artifact run (local CPU, pre-segmented bundles, no nnU-Net stage)
+| Scan | Load | Post-process | Render | Mesh | Total |
+|---|---:|---:|---:|---:|---:|
+| `PostDentalSurgery` | 1,871.9 ms | 2,294.6 ms | 246.1 ms | 5,061.0 ms | **9,473.5 ms** |
+| `PreDentalSurgery` | 1,806.7 ms | 3,248.2 ms | 247.0 ms | 4,442.8 ms | **9,744.7 ms** |
+
+These local timings include no segmentation inference; `timings_ms.segmentation`
+is `null` and `gpu_peak_allocated_mb` is `null` in the demo reports. They are not
+comparable to the 131.4 s full-model figure.
+
+#### Production approach for large CBCT volumes (design proposal, not benchmarked here)
+A 42.8M-voxel scan already needs about 4.9 GB of GPU memory and 131 s on a T4 for
+one inference. Running that synchronously in a web request would hold a worker
+for minutes and risk HTTP timeouts and duplicate work. The production design is:
+
+1. **Presigned object-store ingestion with edge de-identification:** upload
+   `.nii.gz` or zipped DICOM directly to S3/GCS; strip DICOM patient tags before
+   storage. This repository demonstrates tag stripping during in-process ZIP
+   ingestion, not an edge service.
+2. **Asynchronous job API:** `POST /jobs/cbct` returns `202 Accepted`; Redis/Celery
+   (or Cloud Tasks) runs the job and progress is streamed over SSE/WebSockets.
+3. **Pre-warmed GPU workers:** keep weights resident, serialize per-GPU jobs, and
+   autoscale on queue depth. TensorRT/FP16 and tile batching are plausible
+   optimizations but were **not measured** in this submission; no speed-up number
+   is claimed.
+4. **Mesh delivery:** decimate and/or Draco-compress the GLB and serve it from a
+   CDN. The current exporter writes uncompressed GLB (28.7–35.1 MB for these two
+   scans); compression is not implemented here.

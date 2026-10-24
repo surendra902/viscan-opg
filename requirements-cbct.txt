@@ -1,0 +1,13 @@
+# Optional live 3D CBCT inference stack (DentalSegmentator / nnU-Net v2).
+# The base requirements.txt still runs the app: pre-segmented NIfTI/ZIP uploads and
+# the bundled demo scans work without this file. Raw CBCT uploads return HTTP 503
+# until nnunetv2 and the weights below are installed.
+#
+# Weights: Dataset112_DentalSegmentator_v100.zip
+#          https://doi.org/10.5281/zenodo.10829675 (CC BY 4.0, Dot et al. 2024)
+# Env:     VISCAN_CBCT_WEIGHTS_DIR=<extracted folder containing dataset.json
+#          and fold_0/checkpoint_final.pth>
+
+-r requirements.txt
+
+nnunetv2>=2.2.1,<2.5.0

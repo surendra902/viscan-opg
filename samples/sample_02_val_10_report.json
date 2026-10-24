@@ -5,61 +5,61 @@
     "name": "fasterrcnn_resnet50_fpn_v2",
     "version": "2.0.0"
   },
-  "inference_ms": 7662.0,
+  "inference_ms": 9404.5,
   "findings": [
     {
       "class": "caries",
       "confidence": 0.98,
       "tooth_fdi": null,
       "bbox": [
-        1686.7,
-        477.9,
-        1797.5,
-        762.1
+        1032.3,
+        781.9,
+        1138.5,
+        1067.4
       ]
     },
     {
       "class": "caries",
+      "confidence": 0.98,
+      "tooth_fdi": null,
+      "bbox": [
+        1662.2,
+        780.8,
+        1846.6,
+        1080.2
+      ]
+    },
+    {
+      "class": "caries",
+      "confidence": 0.98,
+      "tooth_fdi": null,
+      "bbox": [
+        1686.6,
+        456.5,
+        1795.5,
+        766.9
+      ]
+    },
+    {
+      "class": "caries",
+      "confidence": 0.98,
+      "tooth_fdi": null,
+      "bbox": [
+        1996.2,
+        711.2,
+        2237.7,
+        945.9
+      ]
+    },
+    {
+      "class": "deep_caries",
       "confidence": 0.97,
       "tooth_fdi": null,
       "bbox": [
-        1032.2,
-        781.7,
-        1138.5,
-        1065.8
-      ]
-    },
-    {
-      "class": "caries",
-      "confidence": 0.96,
-      "tooth_fdi": null,
-      "bbox": [
-        2000.4,
-        715.6,
-        2244.9,
-        944.7
-      ]
-    },
-    {
-      "class": "caries",
-      "confidence": 0.96,
-      "tooth_fdi": null,
-      "bbox": [
-        1775.6,
-        498.9,
-        1911.1,
-        757.0
-      ]
-    },
-    {
-      "class": "deep_caries",
-      "confidence": 0.95,
-      "tooth_fdi": null,
-      "bbox": [
-        1746.1,
-        760.3,
-        1968.5,
-        1057.9
+        1737.7,
+        758.1,
+        1985.7,
+        1052.1
       ]
     },
     {
@@ -67,54 +67,43 @@
       "confidence": 0.95,
       "tooth_fdi": null,
       "bbox": [
-        1669.4,
-        795.1,
-        1841.8,
-        1081.9
+        1771.8,
+        488.6,
+        1911.4,
+        761.0
       ]
     },
     {
       "class": "deep_caries",
+      "confidence": 0.91,
+      "tooth_fdi": null,
+      "bbox": [
+        952.4,
+        479.0,
+        1074.8,
+        755.2
+      ]
+    },
+    {
+      "class": "caries",
       "confidence": 0.89,
       "tooth_fdi": null,
       "bbox": [
-        955.0,
-        473.6,
-        1069.3,
-        762.3
+        842.1,
+        762.0,
+        1080.5,
+        1066.6
       ]
     },
     {
-      "class": "caries",
-      "confidence": 0.87,
+      "class": "deep_caries",
+      "confidence": 0.79,
       "tooth_fdi": null,
       "bbox": [
-        749.2,
-        455.9,
-        885.7,
-        710.3
-      ]
-    },
-    {
-      "class": "caries",
-      "confidence": 0.84,
-      "tooth_fdi": null,
-      "bbox": [
-        846.6,
-        483.4,
-        984.7,
-        746.4
-      ]
-    },
-    {
-      "class": "caries",
-      "confidence": 0.8,
-      "tooth_fdi": null,
-      "bbox": [
-        685.0,
-        734.4,
-        967.1,
-        973.3
+        1614.8,
+        437.9,
+        1736.4,
+        779.9
       ]
     },
     {
@@ -122,25 +111,28 @@
       "confidence": 0.79,
       "tooth_fdi": null,
       "bbox": [
-        854.4,
-        756.8,
-        1069.3,
-        1069.9
+        1070.9,
+        781.3,
+        1168.0,
+        1087.8
       ]
     },
     {
-      "class": "caries",
-      "confidence": 0.76,
+      "class": "deep_caries",
+      "confidence": 0.77,
       "tooth_fdi": null,
       "bbox": [
-        1613.6,
-        447.2,
-        1737.0,
-        765.3
+        743.9,
+        462.3,
+        889.2,
+        712.8
       ]
     }
   ],
-  "summary": "12 findings: 10 caries, 2 deep caries.",
-  "annotated_image_url": "/results/sample_02_val_10_annotated.png",
+  "summary": "11 findings: 7 caries, 4 deep caries.",
+  "original_image_url": "/samples/sample_02_val_10_input.png",
+  "annotated_image_url": "/samples/sample_02_val_10_annotated.png",
+  "three_d_available": false,
+  "three_d_note": "No 3D model for a 2D OPG: a panoramic radiograph contains no volumetric data. Upload a CBCT volume (.nii, .nii.gz, or a zipped DICOM/NIfTI series) for 3D segmentation.",
   "disclaimer": "AI-assisted findings for dentist review. Not a diagnosis."
 }

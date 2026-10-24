@@ -95,6 +95,15 @@ meta_style = ParagraphStyle(
     textColor=MUTED_TEXT,
 )
 
+small_style = ParagraphStyle(
+    "SmallNote",
+    parent=styles["Normal"],
+    fontName="Helvetica-Oblique",
+    fontSize=7.5,
+    leading=10,
+    textColor=MUTED_TEXT,
+)
+
 table_header_style = ParagraphStyle(
     "TableHeader",
     parent=styles["Normal"],
@@ -354,7 +363,7 @@ story.append(PageBreak())
 story.append(Paragraph("7. Bonus Track: 3D CBCT Volumetric Segmentation & Nerve Clearance", h1_style))
 
 cbct_intro = """
-<b>Explicit Pretrained Model Disclosure:</b> The 3D CBCT bonus pipeline integrates <b>DentalSegmentator</b> (<code>Dataset112_DentalSegmentator_v100</code>, Dot et al., <i>Journal of Dentistry</i> 2024, Zenodo DOI <code>10.5281/zenodo.10829675</code>, License: <b>CC BY 4.0</b>, <code>nnUNetTrainer__nnUNetPlans__3d_fullres</code>, <code>fold_0</code>, trained on 470 CT/CBCT scans) <b>pretrained as-is</b>. Engineering contributions cover NIfTI / 3D DICOM series ingestion, patient tag de-identification, 60 mm³ 3D connected-component post-processing, exact 3D Euclidean nerve-to-root distance computation in physical millimeters (<code>scipy.spatial.cKDTree</code>), Marching Cubes <code>.stl</code> / <code>.glb</code> surface meshing, and browser WebGL integration (<code>&lt;model-viewer&gt;</code>).
+<b>Explicit Pretrained Model Disclosure:</b> The 3D CBCT bonus pipeline integrates <b>DentalSegmentator</b> (<code>Dataset112_DentalSegmentator_v100</code>, Dot et al., <i>Journal of Dentistry</i> 2024, Zenodo DOI <code>10.5281/zenodo.10829675</code>, License: <b>CC BY 4.0</b>, <code>nnUNetTrainer__nnUNetPlans__3d_fullres</code>, <code>fold_0</code>; the authors report training on 470 CT/CBCT scans) <b>pretrained as-is</b>, with no fine-tuning. Engineering contributions cover NIfTI / 3D DICOM series ingestion, patient tag de-identification, 60 mm³ 3D connected-component post-processing, minimum label-surface distance in physical millimetres (<code>scipy.spatial.cKDTree</code>), Marching Cubes <code>.stl</code> / <code>.glb</code> surface meshing, and browser WebGL integration (<code>&lt;model-viewer&gt;</code>).
 """
 story.append(Paragraph(cbct_intro, body_style))
 story.append(Spacer(1, 4))
@@ -363,18 +372,18 @@ cbct_seg_data = [
     [
         Paragraph("Class ID", table_header_style),
         Paragraph("Anatomical Structure", table_header_style),
-        Paragraph("Voxels (Post-Filtered)", table_header_style),
+        Paragraph("Voxels (Demo Reference Mask)", table_header_style),
         Paragraph("Volume (cm³)", table_header_style),
-        Paragraph("3D Dice vs. Reference", table_header_style),
+        Paragraph("Model Dice vs. Reference", table_header_style),
         Paragraph("Mesh Vertices", table_header_style),
         Paragraph("Mesh Faces", table_header_style),
     ],
-    [Paragraph("1", table_cell_style), Paragraph("<b>maxilla_upper_skull</b>", table_cell_bold), Paragraph("1,476,019", table_cell_style), Paragraph("184.50", table_cell_style), Paragraph("<b>0.9768</b>", table_cell_bold), Paragraph("181,032", table_cell_style), Paragraph("366,752", table_cell_style)],
-    [Paragraph("2", table_cell_style), Paragraph("<b>mandible</b>", table_cell_bold), Paragraph("310,556", table_cell_style), Paragraph("38.82", table_cell_style), Paragraph("<b>0.9849</b>", table_cell_bold), Paragraph("35,515", table_cell_style), Paragraph("71,934", table_cell_style)],
-    [Paragraph("3", table_cell_style), Paragraph("<b>upper_teeth</b>", table_cell_bold), Paragraph("75,590", table_cell_style), Paragraph("9.45", table_cell_style), Paragraph("<b>0.9867</b>", table_cell_bold), Paragraph("9,610", table_cell_style), Paragraph("19,240", table_cell_style)],
-    [Paragraph("4", table_cell_style), Paragraph("<b>lower_teeth</b>", table_cell_bold), Paragraph("62,663", table_cell_style), Paragraph("7.83", table_cell_style), Paragraph("<b>0.9745</b>", table_cell_bold), Paragraph("8,530", table_cell_style), Paragraph("17,068", table_cell_style)],
-    [Paragraph("5", table_cell_style), Paragraph("<b>mandibular_canal</b>", table_cell_bold), Paragraph("6,063", table_cell_style), Paragraph("0.76", table_cell_style), Paragraph("<b>0.8968</b>", table_cell_bold), Paragraph("1,736", table_cell_style), Paragraph("3,456", table_cell_style)],
-    [Paragraph("—", table_cell_style), Paragraph("<b>Total / Mean</b>", table_cell_bold), Paragraph("<b>1,930,891</b>", table_cell_bold), Paragraph("<b>241.36</b>", table_cell_bold), Paragraph("<b>0.9639</b>", table_cell_bold), Paragraph("<b>236,423</b>", table_cell_bold), Paragraph("<b>478,450</b>", table_cell_bold)],
+    [Paragraph("1", table_cell_style), Paragraph("<b>maxilla_upper_skull</b>", table_cell_bold), Paragraph("1,446,339", table_cell_style), Paragraph("180.79", table_cell_style), Paragraph("<b>0.9768</b>", table_cell_bold), Paragraph("706,776", table_cell_style), Paragraph("353,388", table_cell_style)],
+    [Paragraph("2", table_cell_style), Paragraph("<b>mandible</b>", table_cell_bold), Paragraph("309,895", table_cell_style), Paragraph("38.74", table_cell_style), Paragraph("<b>0.9849</b>", table_cell_bold), Paragraph("141,192", table_cell_style), Paragraph("70,596", table_cell_style)],
+    [Paragraph("3", table_cell_style), Paragraph("<b>upper_teeth</b>", table_cell_bold), Paragraph("75,300", table_cell_style), Paragraph("9.41", table_cell_style), Paragraph("<b>0.9867</b>", table_cell_bold), Paragraph("153,088", table_cell_style), Paragraph("76,544", table_cell_style)],
+    [Paragraph("4", table_cell_style), Paragraph("<b>lower_teeth</b>", table_cell_bold), Paragraph("63,081", table_cell_style), Paragraph("7.89", table_cell_style), Paragraph("<b>0.9745</b>", table_cell_bold), Paragraph("139,056", table_cell_style), Paragraph("69,528", table_cell_style)],
+    [Paragraph("5", table_cell_style), Paragraph("<b>mandibular_canal</b>", table_cell_bold), Paragraph("6,655", table_cell_style), Paragraph("0.83", table_cell_style), Paragraph("<b>0.8968</b>", table_cell_bold), Paragraph("29,792", table_cell_style), Paragraph("14,896", table_cell_style)],
+    [Paragraph("—", table_cell_style), Paragraph("<b>Total / Mean</b>", table_cell_bold), Paragraph("<b>1,901,270</b>", table_cell_bold), Paragraph("<b>237.66</b>", table_cell_bold), Paragraph("<b>0.9639</b>", table_cell_bold), Paragraph("<b>1,169,904</b>", table_cell_bold), Paragraph("<b>584,952</b>", table_cell_bold)],
 ]
 
 cbct_seg_table = Table(cbct_seg_data, colWidths=[0.6 * inch, 1.5 * inch, 1.15 * inch, 0.9 * inch, 1.15 * inch, 1.1 * inch, 1.1 * inch])
@@ -385,17 +394,26 @@ cbct_seg_table.setStyle(TableStyle([
     ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, BG_LIGHT]),
 ]))
 story.append(cbct_seg_table)
+story.append(Spacer(1, 4))
+story.append(Paragraph(
+    "Voxel counts, volumes and mesh counts are measured from the reference label map shipped in the "
+    "<code>PostDentalSurgery</code> demo bundle. The Dice column compares a separate model prediction with "
+    "that reference; the demo request itself runs no inference. Mesh counts are from the regenerated "
+    "<code>.glb</code> scene.",
+    small_style,
+))
 story.append(Spacer(1, 6))
 
 cbct_findings_text = """
-• <b>Clinically Useful 3D Finding (Mandibular Canal Clearance on <code>PostDentalSurgery</code>, 360×360×330 @ 0.5mm):</b><br/>
-&nbsp;&nbsp;– <b>Right Hemimandible:</b> <b>min_distance_mm = 0.71 mm</b> (&lt;1.0 mm high-proximity surgical alert) between <code>closest_lower_tooth_voxel=[119, 151, 89]</code> (<code>[59.5, 75.5, 44.5] mm</code>) and <code>closest_canal_voxel=[118, 151, 88]</code> (<code>[59.0, 75.5, 44.0] mm</code>), <code>bbox_3d_voxel=[108, 141, 78, 129, 161, 99]</code>.<br/>
-&nbsp;&nbsp;– <b>Left Hemimandible:</b> <b>min_distance_mm = 1.58 mm</b> (1.0–2.0 mm close proximity) between <code>closest_lower_tooth_voxel=[235, 132, 75]</code> (<code>[117.5, 66.0, 37.5] mm</code>) and <code>closest_canal_voxel=[236, 132, 72]</code> (<code>[118.0, 66.0, 36.0] mm</code>), <code>bbox_3d_voxel=[225, 122, 62, 246, 142, 85]</code>.<br/>
+• <b>3D Finding: Minimum Label-Surface Distance (PostDentalSurgery, 360×360×330 @ 0.5 mm):</b><br/>
+&nbsp;&nbsp;– <b>Side A (voxel x &lt; midpoint):</b> <b>min_distance_mm = 0.71 mm</b> between <code>closest_lower_tooth_voxel=[119, 153, 90]</code> (<code>[59.5, 76.5, 45.0] mm</code>) and <code>closest_canal_voxel=[118, 153, 89]</code> (<code>[59.0, 76.5, 44.5] mm</code>), <code>bbox_3d_voxel=[108, 143, 79, 129, 163, 100]</code>.<br/>
+&nbsp;&nbsp;– <b>Side B (voxel x ≥ midpoint):</b> <b>min_distance_mm = 1.58 mm</b> between <code>closest_lower_tooth_voxel=[235, 132, 75]</code> (<code>[117.5, 66.0, 37.5] mm</code>) and <code>closest_canal_voxel=[236, 132, 72]</code> (<code>[118.0, 66.0, 36.0] mm</code>), <code>bbox_3d_voxel=[225, 122, 62, 246, 142, 85]</code>.<br/>
+&nbsp;&nbsp;– <b>Caveat:</b> the side is a volume-side index, not verified patient laterality; the value is a voxel-surface distance on a 0.5 mm grid, not a nerve-centreline trace or a validated surgical risk score. No diagnostic threshold is applied.<br/>
 • <b>Measured Memory &amp; Latency (Kaggle NVIDIA Tesla T4 GPU, 14.56 GB VRAM, PyTorch 2.11.0+cu128):</b><br/>
 &nbsp;&nbsp;– <b>3D Sliding-Window Segmentation (252 tiles):</b> <code>131,407.1 ms</code> (<code>131.41 s</code>) | <b>Model Init:</b> <code>2,131.9 ms</code><br/>
 &nbsp;&nbsp;– <b>3D Post-Processing + cKDTree Distance:</b> <code>5,816.3 ms</code> (<code>5.82 s</code>) | <b>Marching Cubes Meshing (.stl + .glb):</b> <code>938.6 ms</code> (<code>0.94 s</code>)<br/>
 &nbsp;&nbsp;– <b>Peak GPU VRAM Allocated:</b> <code>4,936.0 MB</code> (<code>4.94 GB</code>) | <b>Process CPU RSS Memory:</b> <code>2,641.8 MB</code> (<code>+1,270.8 MB</code> delta)<br/>
-• <b>Production Architecture for Large CBCT Volumes:</b> (1) Direct presigned S3/GCS multipart upload with edge DICOM de-identification; (2) Async Redis/Celery task queue returning <code>202 Accepted</code> + WebSocket progress; (3) Autoscaled NVIDIA L4/T4 GPU workers with pre-warmed VRAM weights and TensorRT FP16 batched sliding-window tiles (cutting 131s to ~20s); (4) Draco-compressed <code>.glb</code> meshes served via CDN to <code>&lt;model-viewer&gt;</code> / <code>vtk.js</code> / <code>three.js</code>.
+• <b>Production Approach for Large CBCT Volumes (design proposal, not benchmarked in this submission):</b> (1) Direct presigned S3/GCS multipart upload with edge DICOM de-identification; (2) Async Redis/Celery task queue returning <code>202 Accepted</code> + WebSocket progress; (3) Autoscaled GPU workers with pre-warmed weights and serialized per-GPU jobs; TensorRT/FP16 and tile batching are possible optimizations, but no speed-up is claimed here; (4) Decimated/Draco-compressed <code>.glb</code> meshes served via CDN. The current exporter writes uncompressed GLB (28.7–35.1 MB for the two demo scans).
 """
 story.append(Paragraph(cbct_findings_text, body_style))
 story.append(Spacer(1, 6))

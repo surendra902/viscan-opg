@@ -11,11 +11,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Copy dependency definition
-COPY requirements.txt .
+# Live CBCT inference is opt-in: the default image runs 2D OPG, pre-segmented
+# CBCT label maps and the demo bundles. Build with --build-arg INSTALL_CBCT=true
+# and mount the Zenodo weights to enable raw CBCT uploads.
+ARG INSTALL_CBCT=false
 
-# Install Python packages
-RUN pip install --no-cache-dir -r requirements.txt
+COPY requirements.txt requirements-cbct.txt ./
+
+RUN pip install --no-cache-dir -r requirements.txt && \
+    if [ "$INSTALL_CBCT" = "true" ]; then pip install --no-cache-dir -r requirements-cbct.txt; fi
 
 # Copy application source code
 COPY . .

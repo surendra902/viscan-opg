@@ -5,65 +5,46 @@
     "name": "fasterrcnn_resnet50_fpn_v2",
     "version": "2.0.0"
   },
-  "inference_ms": 6213.6,
+  "inference_ms": 8759.0,
   "findings": [
     {
       "class": "caries",
-      "confidence": 0.97,
+      "confidence": 0.98,
       "tooth_fdi": null,
       "bbox": [
-        1899.3,
-        706.7,
-        2139.6,
-        983.0
-      ]
-    },
-    {
-      "class": "periapical_lesion",
-      "confidence": 0.9,
-      "tooth_fdi": null,
-      "bbox": [
-        1766.1,
-        721.8,
-        1992.2,
-        1040.8
+        1895.3,
+        700.3,
+        2139.2,
+        989.3
       ]
     },
     {
       "class": "impacted_tooth",
-      "confidence": 0.89,
+      "confidence": 0.95,
       "tooth_fdi": null,
       "bbox": [
-        2037.3,
-        676.5,
-        2242.9,
-        930.7
-      ]
-    },
-    {
-      "class": "caries",
-      "confidence": 0.87,
-      "tooth_fdi": null,
-      "bbox": [
-        1793.7,
-        422.3,
-        1954.8,
-        723.6
+        2038.6,
+        681.8,
+        2237.7,
+        935.4
       ]
     },
     {
       "class": "impacted_tooth",
-      "confidence": 0.78,
+      "confidence": 0.76,
       "tooth_fdi": null,
       "bbox": [
-        709.1,
-        680.7,
-        909.8,
-        936.2
+        707.0,
+        674.8,
+        907.2,
+        950.8
       ]
     }
   ],
-  "summary": "5 findings: 2 caries, 2 impacted tooth, 1 periapical lesion.",
-  "annotated_image_url": "/results/sample_05_val_21_annotated.png",
+  "summary": "3 findings: 1 caries, 2 impacted tooth.",
+  "original_image_url": "/samples/sample_05_val_21_input.png",
+  "annotated_image_url": "/samples/sample_05_val_21_annotated.png",
+  "three_d_available": false,
+  "three_d_note": "No 3D model for a 2D OPG: a panoramic radiograph contains no volumetric data. Upload a CBCT volume (.nii, .nii.gz, or a zipped DICOM/NIfTI series) for 3D segmentation.",
   "disclaimer": "AI-assisted findings for dentist review. Not a diagnosis."
 }
