@@ -498,18 +498,15 @@ def index_page():
       summaryText.textContent = data.summary;
       annotPreview.innerHTML = `<img src="${data.annotated_image_url}" alt="Annotated">`;
 
-      if (data.modality === 'CBCT' && data.mesh_glb_url) {
+      if (data.mesh_glb_url) {
         cbct3dSection.style.display = 'block';
         cbctModelViewer.src = data.mesh_glb_url;
         downloadGlbBtn.style.display = 'inline-block';
         downloadGlbBtn.href = data.mesh_glb_url;
-        downloadGlbBtn.download = `${data.image_id}_scene.glb`;
+        downloadGlbBtn.download = `${data.image_id}_3d.glb`;
       } else {
-        cbct3dSection.style.display = 'block';
-        cbctModelViewer.src = '/samples/cbct/PostDentalSurgery_scene.glb';
-        downloadGlbBtn.style.display = 'inline-block';
-        downloadGlbBtn.href = '/samples/cbct/PostDentalSurgery_scene.glb';
-        downloadGlbBtn.download = 'PostDentalSurgery_scene.glb';
+        cbct3dSection.style.display = 'none';
+        downloadGlbBtn.style.display = 'none';
       }
 
       findingsBody.innerHTML = '';

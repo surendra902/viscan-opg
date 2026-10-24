@@ -462,57 +462,99 @@ def write_binary_stl(path: Path, vertices: np.ndarray, faces: np.ndarray) -> Non
         f.write(records.tobytes())
 
 
-def write_multi_mesh_glb(path: Path, meshes: List[Tuple[str, np.ndarray, np.ndarray, Tuple[int, int, int, int]]]) -> None:
+def _compute_vertex_normals(verts: np.ndarray, faces: np.ndarray) -> np.ndarray:
+    """Computes smooth per-vertex normals from triangle faces."""
+    normals = np.zeros_like(verts, dtype=np.float32)
+    if len(faces) == 0 or len(verts) == 0:
+        normals[:, 1] = 1.0
+        return normals
+    tris = verts[faces]
+    fn = np.cross(tris[:, 1] - tris[:, 0], tris[:, 2] - tris[:, 0])
+    np.add.at(normals, faces[:, 0], fn)
+    np.add.at(normals, faces[:, 1], fn)
+    np.add.at(normals, faces[:, 2], fn)
+    norms = np.linalg.norm(normals, axis=1, keepdims=True)
+    norms[norms == 0] = 1.0
+    return (normals / norms).astype("<f4")
+
+
+def write_multi_mesh_glb(
+    path: Path,
+    meshes: List[Tuple[str, np.ndarray, np.ndarray, Tuple[int, int, int, int]]],
+    convert_nifti_to_yup: bool = True,
+) -> None:
     """
-    Writes a standard glTF 2.0 binary (.glb) scene containing multiple named, color-coded 3D meshes.
-    Works in any environment without requiring trimesh.
+    Writes a centered, standard glTF 2.0 binary (.glb) scene with explicit vertex NORMALs
+    and double-sided pbrMetallicRoughness materials for Babylon.js (gr.Model3D) & Three.js (<model-viewer>).
     """
+    valid_meshes = [(n, v, f, c) for (n, v, f, c) in meshes if len(v) > 0 and len(f) > 0]
+    if not valid_meshes:
+        return
+
+    all_pts = np.concatenate([v for (_, v, _, _) in valid_meshes], axis=0)
+    center_vec = 0.5 * (all_pts.min(axis=0) + all_pts.max(axis=0))
+
     buffer_views = []
     accessors = []
+    materials = []
     gltf_meshes = []
     nodes = []
     bin_parts = []
     byte_offset = 0
 
-    for idx, (name, verts, faces, rgba) in enumerate(meshes):
-        if len(verts) == 0 or len(faces) == 0:
-            continue
-        verts_f32 = np.ascontiguousarray(verts, dtype="<f4")
-        faces_u32 = np.ascontiguousarray(faces.ravel(), dtype="<u4")
-        colors_u8 = np.tile(np.array(rgba, dtype=np.uint8), (len(verts_f32), 1))
+    def _append_chunk(b: bytes, target: int) -> int:
+        nonlocal byte_offset
+        pad = (4 - (len(b) % 4)) % 4
+        b_padded = b + (b"\x00" * pad)
+        bv_idx = len(buffer_views)
+        buffer_views.append({
+            "buffer": 0,
+            "byteOffset": byte_offset,
+            "byteLength": len(b),
+            "target": target,
+        })
+        bin_parts.append(b_padded)
+        byte_offset += len(b_padded)
+        return bv_idx
 
-        v_bytes = verts_f32.tobytes()
-        c_bytes = colors_u8.tobytes()
-        f_bytes = faces_u32.tobytes()
+    for name, verts, faces, rgba in valid_meshes:
+        v_centered = np.asarray(verts, dtype=np.float32) - center_vec[None, :]
+        f_arr = np.asarray(faces, dtype=np.uint32).reshape((-1, 3))
 
-        # Align each buffer chunk to 4 bytes
-        def _append_chunk(b: bytes, target: int) -> int:
-            nonlocal byte_offset
-            pad = (4 - (len(b) % 4)) % 4
-            b_padded = b + (b"\x00" * pad)
-            bv_idx = len(buffer_views)
-            buffer_views.append({
-                "buffer": 0,
-                "byteOffset": byte_offset,
-                "byteLength": len(b),
-                "target": target,
-            })
-            bin_parts.append(b_padded)
-            byte_offset += len(b_padded)
-            return bv_idx
+        if convert_nifti_to_yup:
+            v_gltf = np.stack([v_centered[:, 0], v_centered[:, 2], -v_centered[:, 1]], axis=1).astype("<f4")
+            f_arr = f_arr[:, [0, 2, 1]]
+        else:
+            v_gltf = np.ascontiguousarray(v_centered, dtype="<f4")
 
-        bv_pos = _append_chunk(v_bytes, 34962)
-        bv_col = _append_chunk(c_bytes, 34962)
-        bv_idx = _append_chunk(f_bytes, 34963)
+        n_gltf = _compute_vertex_normals(v_gltf, f_arr)
+        faces_u32 = np.ascontiguousarray(f_arr.ravel(), dtype="<u4")
+
+        rgba_opaque = (int(rgba[0]), int(rgba[1]), int(rgba[2]), 255)
+        colors_u8 = np.tile(np.array(rgba_opaque, dtype=np.uint8), (len(v_gltf), 1))
+
+        bv_pos = _append_chunk(v_gltf.tobytes(), 34962)
+        bv_norm = _append_chunk(n_gltf.tobytes(), 34962)
+        bv_col = _append_chunk(colors_u8.tobytes(), 34962)
+        bv_idx = _append_chunk(faces_u32.tobytes(), 34963)
 
         acc_pos = len(accessors)
         accessors.append({
             "bufferView": bv_pos,
             "componentType": 5126,
-            "count": len(verts_f32),
+            "count": len(v_gltf),
             "type": "VEC3",
-            "min": [float(x) for x in verts_f32.min(axis=0)],
-            "max": [float(x) for x in verts_f32.max(axis=0)],
+            "min": [float(x) for x in v_gltf.min(axis=0)],
+            "max": [float(x) for x in v_gltf.max(axis=0)],
+        })
+        acc_norm = len(accessors)
+        accessors.append({
+            "bufferView": bv_norm,
+            "componentType": 5126,
+            "count": len(n_gltf),
+            "type": "VEC3",
+            "min": [float(x) for x in n_gltf.min(axis=0)],
+            "max": [float(x) for x in n_gltf.max(axis=0)],
         })
         acc_col = len(accessors)
         accessors.append({
@@ -530,12 +572,24 @@ def write_multi_mesh_glb(path: Path, meshes: List[Tuple[str, np.ndarray, np.ndar
             "type": "SCALAR",
         })
 
+        mat_i = len(materials)
+        materials.append({
+            "name": f"mat_{name}",
+            "doubleSided": True,
+            "pbrMetallicRoughness": {
+                "baseColorFactor": [1.0, 1.0, 1.0, 1.0],
+                "metallicFactor": 0.08,
+                "roughnessFactor": 0.42,
+            },
+        })
+
         mesh_i = len(gltf_meshes)
         gltf_meshes.append({
             "name": name,
             "primitives": [{
-                "attributes": {"POSITION": acc_pos, "COLOR_0": acc_col},
+                "attributes": {"POSITION": acc_pos, "NORMAL": acc_norm, "COLOR_0": acc_col},
                 "indices": acc_idx,
+                "material": mat_i,
                 "mode": 4,
             }],
         })
@@ -548,6 +602,7 @@ def write_multi_mesh_glb(path: Path, meshes: List[Tuple[str, np.ndarray, np.ndar
         "scenes": [{"nodes": list(range(len(nodes)))}],
         "nodes": nodes,
         "meshes": gltf_meshes,
+        "materials": materials,
         "accessors": accessors,
         "bufferViews": buffer_views,
         "buffers": [{"byteLength": len(bin_blob)}],
@@ -564,6 +619,194 @@ def write_multi_mesh_glb(path: Path, meshes: List[Tuple[str, np.ndarray, np.ndar
         f.write(json_bytes)
         f.write(struct.pack("<II", len(bin_blob), 0x004E4942))
         f.write(bin_blob)
+
+
+def export_opg_3d_relief_glb(
+    img_pil: Image.Image,
+    findings: List[Dict[str, Any]],
+    output_dir: Path,
+    image_id: str,
+) -> str:
+    """
+    Generates an input-specific 3D Radiodensity Relief + 3D Extruded Pathology Bounding-Box (.glb)
+    mesh directly from a 2D OPG radiograph's pixel intensities and its detected Faster R-CNN findings.
+    Ensures every 2D OPG input produces its own unique 3D topography and 3D finding boxes.
+    """
+    output_dir.mkdir(parents=True, exist_ok=True)
+    orig_w, orig_h = img_pil.size
+    grid_w, grid_h = 160, 80
+    gray_small = np.asarray(img_pil.convert("L").resize((grid_w, grid_h), Image.Resampling.BILINEAR), dtype=np.float32)
+
+    # Normalize intensity [0, 1] -> Z relief height in mm [0, 16]
+    lo, hi = float(np.percentile(gray_small, 2)), float(np.percentile(gray_small, 99))
+    if hi <= lo:
+        hi = lo + 1.0
+    norm_z = np.clip((gray_small - lo) / (hi - lo), 0.0, 1.0)
+
+    # Build vertex grid in glTF Y-up space: X in [-80, 80], Y (vertical) in [-40, 40], Z (relief) in [0, 16]
+    xs = np.linspace(-80.0, 80.0, grid_w, dtype=np.float32)
+    ys = np.linspace(40.0, -40.0, grid_h, dtype=np.float32)
+    xv, yv = np.meshgrid(xs, ys)
+    zv = norm_z * 16.0
+    verts_relief = np.stack([xv.ravel(), yv.ravel(), zv.ravel()], axis=1).astype(np.float32)
+
+    # Build triangle indices for the (grid_h, grid_w) surface
+    r_idx = np.arange(grid_h - 1, dtype=np.uint32)[:, None]
+    c_idx = np.arange(grid_w - 1, dtype=np.uint32)[None, :]
+    v00 = (r_idx * grid_w + c_idx).ravel()
+    v01 = v00 + 1
+    v10 = v00 + grid_w
+    v11 = v10 + 1
+    faces_relief = np.concatenate([
+        np.stack([v00, v10, v01], axis=1),
+        np.stack([v01, v10, v11], axis=1),
+    ], axis=0).astype(np.uint32)
+
+    # Build per-vertex color from radiograph intensity + highlight detected finding regions
+    v_colors = np.zeros((grid_h, grid_w, 4), dtype=np.uint8)
+    base_val = (norm_z * 215.0 + 30.0).astype(np.uint8)
+    v_colors[:, :, 0] = base_val
+    v_colors[:, :, 1] = np.clip(base_val * 0.96, 0, 255).astype(np.uint8)
+    v_colors[:, :, 2] = np.clip(base_val * 0.85, 0, 255).astype(np.uint8)
+    v_colors[:, :, 3] = 255
+
+    OPG_CLASS_RGBA = {
+        "caries": (255, 215, 0, 255),
+        "deep_caries": (255, 69, 0, 255),
+        "periapical_lesion": (186, 85, 211, 255),
+        "impacted_tooth": (0, 191, 255, 255),
+    }
+
+    box_meshes_by_class: Dict[str, Tuple[List[np.ndarray], List[np.ndarray], int]] = {}
+    cube_tris = np.array([
+        [0, 1, 2], [0, 2, 3], [4, 6, 5], [4, 7, 6],
+        [0, 4, 5], [0, 5, 1], [2, 6, 7], [2, 7, 3],
+        [0, 3, 7], [0, 7, 4], [1, 5, 6], [1, 6, 2],
+    ], dtype=np.uint32)
+
+    for f in findings:
+        cls_name = f.get("class", "caries")
+        bbox = f.get("bbox")
+        if not bbox or len(bbox) != 4:
+            continue
+        x0, y0, x1, y1 = bbox
+        # Map pixel bbox [x0, y0, x1, y1] -> grid indices & glTF coordinates
+        gx0 = int(np.clip(x0 / max(1, orig_w) * (grid_w - 1), 0, grid_w - 1))
+        gx1 = int(np.clip(x1 / max(1, orig_w) * (grid_w - 1), 0, grid_w - 1))
+        gy0 = int(np.clip(y0 / max(1, orig_h) * (grid_h - 1), 0, grid_h - 1))
+        gy1 = int(np.clip(y1 / max(1, orig_h) * (grid_h - 1), 0, grid_h - 1))
+
+        rgba = OPG_CLASS_RGBA.get(cls_name, (0, 255, 128, 255))
+        # Tint the 3D surface inside the detected bounding box
+        v_colors[gy0:gy1 + 1, gx0:gx1 + 1, :3] = (
+            0.35 * v_colors[gy0:gy1 + 1, gx0:gx1 + 1, :3] + 0.65 * np.array(rgba[:3])
+        ).astype(np.uint8)
+
+        # Also create 4 3D border rails (hollow 3D bounding box frame) floating at Z = [14..21] mm
+        wx0 = (x0 / max(1, orig_w)) * 160.0 - 80.0
+        wx1 = (x1 / max(1, orig_w)) * 160.0 - 80.0
+        wy0 = 40.0 - (y0 / max(1, orig_h)) * 80.0
+        wy1 = 40.0 - (y1 / max(1, orig_h)) * 80.0
+        t = 0.75  # rail thickness in mm
+        z_lo, z_hi = 13.5, 19.5
+        rails = [
+            (wx0 - t, wx1 + t, wy0 - t, wy0 + t),  # top bar
+            (wx0 - t, wx1 + t, wy1 - t, wy1 + t),  # bottom bar
+            (wx0 - t, wx0 + t, wy1 - t, wy0 + t),  # left bar
+            (wx1 - t, wx1 + t, wy1 - t, wy0 + t),  # right bar
+        ]
+        if cls_name not in box_meshes_by_class:
+            box_meshes_by_class[cls_name] = ([], [], 0)
+        v_list, f_list, v_off = box_meshes_by_class[cls_name]
+        for rx0, rx1, ry0, ry1 in rails:
+            c_verts = np.array([
+                [rx0, ry0, z_lo], [rx1, ry0, z_lo], [rx1, ry1, z_lo], [rx0, ry1, z_lo],
+                [rx0, ry0, z_hi], [rx1, ry0, z_hi], [rx1, ry1, z_hi], [rx0, ry1, z_hi],
+            ], dtype=np.float32)
+            v_list.append(c_verts)
+            f_list.append(cube_tris + v_off)
+            v_off += 8
+        box_meshes_by_class[cls_name] = (v_list, f_list, v_off)
+
+    # Write combined multi-mesh GLB (with per-vertex tinted relief + 3D detection box frames)
+    n_relief = _compute_vertex_normals(verts_relief, faces_relief)
+    c_relief = v_colors.reshape((-1, 4))
+
+    buffer_views = []
+    accessors = []
+    materials = []
+    gltf_meshes = []
+    nodes = []
+    bin_parts = []
+    byte_offset = 0
+
+    def _append(b: bytes, target: int) -> int:
+        nonlocal byte_offset
+        pad = (4 - (len(b) % 4)) % 4
+        b_pad = b + (b"\x00" * pad)
+        idx = len(buffer_views)
+        buffer_views.append({"buffer": 0, "byteOffset": byte_offset, "byteLength": len(b), "target": target})
+        bin_parts.append(b_pad)
+        byte_offset += len(b_pad)
+        return idx
+
+    def _add_node(name: str, v_f32: np.ndarray, n_f32: np.ndarray, c_u8: np.ndarray, f_u32: np.ndarray) -> None:
+        bv_p = _append(v_f32.tobytes(), 34962)
+        bv_n = _append(n_f32.tobytes(), 34962)
+        bv_c = _append(c_u8.tobytes(), 34962)
+        bv_i = _append(f_u32.tobytes(), 34963)
+        ap = len(accessors)
+        accessors.append({"bufferView": bv_p, "componentType": 5126, "count": len(v_f32), "type": "VEC3",
+                          "min": [float(x) for x in v_f32.min(axis=0)], "max": [float(x) for x in v_f32.max(axis=0)]})
+        an = len(accessors)
+        accessors.append({"bufferView": bv_n, "componentType": 5126, "count": len(n_f32), "type": "VEC3",
+                          "min": [float(x) for x in n_f32.min(axis=0)], "max": [float(x) for x in n_f32.max(axis=0)]})
+        ac = len(accessors)
+        accessors.append({"bufferView": bv_c, "componentType": 5121, "normalized": True, "count": len(c_u8), "type": "VEC4"})
+        ai = len(accessors)
+        accessors.append({"bufferView": bv_i, "componentType": 5125, "count": len(f_u32), "type": "SCALAR"})
+        mi = len(materials)
+        materials.append({"name": f"mat_{name}", "doubleSided": True,
+                          "pbrMetallicRoughness": {"baseColorFactor": [1.0, 1.0, 1.0, 1.0], "metallicFactor": 0.08, "roughnessFactor": 0.45}})
+        m_idx = len(gltf_meshes)
+        gltf_meshes.append({"name": name, "primitives": [{"attributes": {"POSITION": ap, "NORMAL": an, "COLOR_0": ac}, "indices": ai, "material": mi, "mode": 4}]})
+        nodes.append({"name": name, "mesh": m_idx})
+
+    _add_node("opg_3d_radiodensity_surface", verts_relief.astype("<f4"), n_relief, c_relief, faces_relief.ravel().astype("<u4"))
+
+    for cls_name, (v_list, f_list, _) in box_meshes_by_class.items():
+        if not v_list:
+            continue
+        v_box = np.concatenate(v_list, axis=0).astype("<f4")
+        f_box = np.concatenate(f_list, axis=0).astype(np.uint32)
+        n_box = _compute_vertex_normals(v_box, f_box)
+        rgba = OPG_CLASS_RGBA.get(cls_name, (0, 255, 128, 255))
+        c_box = np.tile(np.array(rgba, dtype=np.uint8), (len(v_box), 1))
+        _add_node(f"3d_boxes_{cls_name}", v_box, n_box, c_box, f_box.ravel().astype("<u4"))
+
+    bin_blob = b"".join(bin_parts)
+    gltf_dict = {
+        "asset": {"version": "2.0", "generator": "Viscan OPG 3D Radiodensity Topography Exporter"},
+        "scene": 0,
+        "scenes": [{"nodes": list(range(len(nodes)))}],
+        "nodes": nodes,
+        "meshes": gltf_meshes,
+        "materials": materials,
+        "accessors": accessors,
+        "bufferViews": buffer_views,
+        "buffers": [{"byteLength": len(bin_blob)}],
+    }
+    json_bytes = json.dumps(gltf_dict, separators=(",", ":")).encode("utf-8")
+    json_bytes += b" " * ((4 - (len(json_bytes) % 4)) % 4)
+    glb_path = output_dir / f"{image_id}_opg3d.glb"
+    total_len = 12 + 8 + len(json_bytes) + 8 + len(bin_blob)
+    with open(glb_path, "wb") as f:
+        f.write(struct.pack("<4sII", b"glTF", 2, total_len))
+        f.write(struct.pack("<II", len(json_bytes), 0x4E4F534A))
+        f.write(json_bytes)
+        f.write(struct.pack("<II", len(bin_blob), 0x004E4942))
+        f.write(bin_blob)
+    return f"/results/{glb_path.name}"
 
 
 def export_cbct_meshes(

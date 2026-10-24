@@ -120,3 +120,30 @@ def test_cbct_analyze_endpoint_returns_3d_schema():
     assert data["mesh_glb_url"].endswith(".glb")
     assert len(data["findings"]) == 2
     assert "disclaimer" in data
+
+
+def test_different_inputs_produce_distinct_3d_glb_meshes(tmp_path: Path):
+    """Verify different CBCT volumes and different 2D OPG images produce distinct 3D .glb meshes."""
+    from PIL import Image
+    from cbct_pipeline import export_opg_3d_relief_glb
+
+    vol1, spacing = _build_synthetic_cbct_labelmap()
+    vol2 = vol1.copy()
+    vol2[20:, :, :] = 0  # Right hemimandible only
+
+    glb1_url, _ = export_cbct_meshes(vol1, spacing, tmp_path, "cbct_1")
+    glb2_url, _ = export_cbct_meshes(vol2, spacing, tmp_path, "cbct_2")
+    b1 = (tmp_path / Path(glb1_url).name).read_bytes()
+    b2 = (tmp_path / Path(glb2_url).name).read_bytes()
+    assert b1 != b2
+
+    rng1 = np.random.default_rng(1)
+    rng2 = np.random.default_rng(2)
+    img1 = Image.fromarray(rng1.integers(20, 220, size=(200, 400, 3), dtype=np.uint8))
+    img2 = Image.fromarray(rng2.integers(20, 220, size=(200, 400, 3), dtype=np.uint8))
+    opg1_url = export_opg_3d_relief_glb(img1, [{"class": "caries", "bbox": [30, 40, 80, 90]}], tmp_path, "opg_1")
+    opg2_url = export_opg_3d_relief_glb(img2, [{"class": "impacted_tooth", "bbox": [120, 50, 190, 140]}], tmp_path, "opg_2")
+    ob1 = (tmp_path / Path(opg1_url).name).read_bytes()
+    ob2 = (tmp_path / Path(opg2_url).name).read_bytes()
+    assert ob1 != ob2
+    assert ob1 != b1

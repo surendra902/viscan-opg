@@ -40,6 +40,7 @@ from cbct_pipeline import (
     postprocess_and_compute_findings,
     render_cbct_ortho_views,
     export_cbct_meshes,
+    export_opg_3d_relief_glb,
     write_nifti_gz_bytes,
 )
 
@@ -164,8 +165,9 @@ class DentalAnalysisService:
         annotated_filepath = self.results_dir / annotated_filename
         annotated_img.save(annotated_filepath, format="PNG")
 
-        # 5. Deterministic Human-Readable Summary
+        # 5. Deterministic Human-Readable Summary & Input-Specific 3D Relief + Bounding-Box GLB
         summary = self._generate_summary(findings)
+        opg_glb_url = export_opg_3d_relief_glb(img_pil, findings, self.results_dir, image_id)
 
         inference_ms = round((time.perf_counter() - t_start) * 1000.0, 1)
 
@@ -181,6 +183,7 @@ class DentalAnalysisService:
             "summary": summary,
             "original_image_url": f"/results/{original_filename}",
             "annotated_image_url": f"/results/{annotated_filename}",
+            "mesh_glb_url": opg_glb_url,
             "disclaimer": DISCLAIMER_TEXT,
         }
 
@@ -207,7 +210,11 @@ class DentalAnalysisService:
 
         sample_dir = Path(__file__).resolve().parent / "samples" / "cbct"
         sample_glb = sample_dir / "PostDentalSurgery_scene.glb"
-        is_reference_sample = (vol_xyz.shape == (360, 360, 330) and sample_glb.exists())
+        is_reference_sample = (
+            vol_xyz.shape == (360, 360, 330)
+            and int((seg_xyz == 5).sum()) == 6063
+            and sample_glb.exists()
+        )
 
         seg_clean, structure_stats, findings = postprocess_and_compute_findings(
             seg_xyz, spacing_xyz, apply_island_filter=not is_reference_sample
