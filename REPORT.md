@@ -211,6 +211,23 @@ None beats the baseline's 0.402 at its own operating point; mirror averaging com
 
 Per-class thresholds were not run — one global setting per pipeline. The two three-stage fusions were scored on detection AP only. A side-by-side panel of ground truth, baseline and the best alternative would need prediction dumps re-rendered from that Kaggle session; the rendered comparisons that exist here are Figures 3 and 4.
 
+### 5.6 The models behind these numbers
+
+Four models were trained for this report. Only the first one is deployed.
+
+| Model | Role | How it was trained | Best test score |
+|---|---|---|---|
+| Faster R-CNN, ResNet-50 FPN V2, 800 × 1333 | The shipped detector | 43.3 M parameters, 12 epochs on 635 images, best epoch 8 | AP50 0.496, AP 0.329 |
+| Faster R-CNN, ResNet-50 FPN V2, 960 × 1600 | Resolution check | Same data and seed, batch size 1, best epoch 5 | AP50 0.493, AP 0.313 |
+| RetinaNet, ResNet-50 FPN V2 | Architecture check | Same recipe and 12 epochs; scored with mirror averaging | AP50 0.095, AP 0.053 |
+| ConvNeXt-Tiny crop checker | Re-scores or re-labels boxes proposed by the tiled detector | 6,380 crops: 3,190 annotated boxes plus 3,190 background crops | 92.1% accuracy on its own training crops; effect on AP in §5.5 |
+
+Two of these are detectors doing the same job, which is the only clean architecture comparison I have. The two-stage Faster R-CNN was better by a wide margin: 0.496 AP50 against 0.095. That gap is larger than the architecture alone explains, because RetinaNet was still improving when its 12 epochs ran out, so the comparison reflects the schedule as much as the design. On this data, with the training each of them received, Faster R-CNN is the better model I have evidence for.
+
+The crop checker is not a detector. It looks at a box someone else proposed and either re-scores it or re-labels it; as a re-scorer on the tiled detector it moved slice AP from 0.219 to 0.221, and as a re-labeller it dropped AP50 to 0.272. Its 92.1% is training accuracy on the crop bank, not held-out accuracy.
+
+Everything else in §5.5 — mirroring, tiling, weighted box fusion — is a change in how the shipped model is run, not a new model.
+
 ---
 
 ## 6. Failures and limitations
