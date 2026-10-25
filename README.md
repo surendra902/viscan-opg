@@ -337,6 +337,14 @@ Computes:
 - Extracts 5 real failure cases to `evaluation_results/failures/`
 - Measures CPU latency per image
 
+### Architecture Comparison: RetinaNet
+`configs/retinanet.yaml` runs the same data, seed, schedule, and 800×1333 input with RetinaNet ResNet-50 FPN V2 (one-stage, focal loss) instead of Faster R-CNN, so the test metrics isolate the architecture. `kaggle_retinanet_notebook.ipynb` is a self-contained Kaggle GPU notebook that clones a pinned commit, prepares DENTEX, trains, evaluates with validation-only threshold selection (`--select_threshold val`), and writes the comparable metrics:
+```bash
+python train.py --config configs/retinanet.yaml
+python evaluate.py --weights checkpoints/retinanet/best_model.pth --config configs/retinanet.yaml --output_dir evaluation_retinanet --skip_variant --select_threshold val
+```
+No RetinaNet result is reported until that run completes; the notebook's comparison table marks the Faster R-CNN column as reference values from `REPORT.md`.
+
 ---
 
 ## 7. Sample Artifacts
