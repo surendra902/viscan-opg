@@ -362,8 +362,37 @@ python ensemble_wbf.py \
 ```
 `evaluate.py` reports single-pass CPU latency; the ensemble's wall-clock is the sum of its members' latencies and is not measured by the fusion script.
 
+### Sliced Inference at Native Scale
+DENTEX images are 1,976–3,139 px wide; full-image inference downscales them by 0.425–0.675× (mean 0.474×), which shrinks small lesions. This script runs the same weights on the full image and on overlapping 800×800 native-scale crops, and writes one COCO dump per view group so WBF can fuse them:
+```bash
+python slice_inference.py --weights checkpoints/best_model.pth --config configs/baseline.yaml \
+  --split val --data_dir data/dentex --output_dir preds_slice --views both \
+  --tile 800 --overlap 0.25 --tta hflip --max_dets 100
+
+python ensemble_wbf.py \
+  --gt data/dentex/annotations/instances_test.json --images_dir data/dentex/images/test \
+  --preds preds_slice/predictions_test_full.json preds_slice/predictions_test_tiles.json \
+  --val-gt data/dentex/annotations/instances_val.json \
+  --val-preds preds_slice/predictions_val_full.json preds_slice/predictions_val_tiles.json \
+  --output_dir evaluation_sliced
+```
+`slice_meta_<split>.json` records the tile grid, detections per view, and wall-clock per image on the device used. Slicing multiplies forward passes by the tile count (~10 per 2830×1367 image), so it is a benchmark artifact, not a replacement for the deployed single-pass model.
+
+### Cascade Crop Refiner
+A ConvNeXt-Tiny (BSD-3-Clause) classifier trained only on train-split GT crops re-scores detector boxes from a 1.3× context crop:
+```bash
+python cascade_refine.py build --data_dir data/dentex --output_dir checkpoints/cascade
+python cascade_refine.py train --bank_dir checkpoints/cascade --output checkpoints/cascade/convnext_cascade.pth
+python cascade_refine.py apply --checkpoint checkpoints/cascade/convnext_cascade.pth \
+  --preds preds_slice/predictions_val_full.json --split val --data_dir data/dentex \
+  --mode rescore --output_dir preds_cascade
+```
+`rescore` keeps box and label and sets `score = sqrt(det_score × p_label)`; `reclass` takes the argmax over the four findings, drops boxes whose argmax is background, and re-scores. Both variants are measured, not assumed.
+
 ### Kaggle Benchmark Notebook
-`kaggle_benchmark_notebook.ipynb` runs the full comparison in one GPU session: it verifies the held-out split, validates the downloaded Faster R-CNN checkpoint against its published SHA-256, evaluates Faster R-CNN with and without TTA, trains and evaluates RetinaNet, fuses both with WBF, and prints the comparison table from the JSON files. It reports no metric that the run did not produce. No RetinaNet or ensemble result is claimed in this repository until that run completes.
+`kaggle_benchmark_notebook.ipynb` runs the architecture comparison in one GPU session: it verifies the held-out split, validates the downloaded Faster R-CNN checkpoint against its published SHA-256, evaluates Faster R-CNN with and without TTA, trains and evaluates RetinaNet, and fuses both with WBF.
+
+`kaggle_beat_benchmark_notebook.ipynb` runs the full ladder above (E1–E5): full-image, hflip TTA, native-scale sliced inference, RetinaNet, WBF over all members, and the crop refiner in both modes. It selects each pipeline on validation mAP, evaluates the test split once, and prints every measured row. Neither notebook reports a metric the run did not produce; no ensemble, sliced-inference, or refiner result is claimed in this repository until a run completes.
 
 ---
 

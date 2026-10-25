@@ -60,6 +60,23 @@ def _iou_xyxy(a: Sequence[float], b: Sequence[float]) -> float:
     return inter / union if union > 0 else 0.0
 
 
+def _iou_vector(box: np.ndarray, others: np.ndarray) -> np.ndarray:
+    """IoU of one xyxy box against an (n, 4) array of xyxy boxes."""
+    if len(others) == 0:
+        return np.zeros((0,), dtype=np.float64)
+    x1 = np.maximum(box[0], others[:, 0])
+    y1 = np.maximum(box[1], others[:, 1])
+    x2 = np.minimum(box[2], others[:, 2])
+    y2 = np.minimum(box[3], others[:, 3])
+    inter = np.clip(x2 - x1, 0.0, None) * np.clip(y2 - y1, 0.0, None)
+    area_a = max(0.0, box[2] - box[0]) * max(0.0, box[3] - box[1])
+    areas_b = np.clip(others[:, 2] - others[:, 0], 0.0, None) * np.clip(
+        others[:, 3] - others[:, 1], 0.0, None
+    )
+    union = area_a + areas_b - inter
+    return np.where(union > 0, inter / np.maximum(union, 1e-12), 0.0)
+
+
 def wbf_fuse_boxes(
     boxes: np.ndarray,
     scores: np.ndarray,
@@ -78,16 +95,17 @@ def wbf_fuse_boxes(
 
     order = np.argsort(-scores)
     clusters: List[Dict[str, Any]] = []
+    fused = np.zeros((0, 4), dtype=np.float64)
 
     for idx in order:
         box = boxes[idx].astype(np.float64)
         score = float(scores[idx])
 
         best_j, best_iou = -1, 0.0
-        for j, cluster in enumerate(clusters):
-            iou = _iou_xyxy(box, cluster["fused"])
-            if iou > best_iou:
-                best_iou, best_j = iou, j
+        if len(clusters) > 0:
+            ious = _iou_vector(box, fused)
+            best_j = int(np.argmax(ious))
+            best_iou = float(ious[best_j])
 
         if best_j >= 0 and best_iou >= iou_thresh:
             cluster = clusters[best_j]
@@ -95,8 +113,10 @@ def wbf_fuse_boxes(
             cluster["scores"].append(score)
             weights = np.asarray(cluster["scores"])
             cluster["fused"] = np.average(np.asarray(cluster["boxes"]), axis=0, weights=weights)
+            fused[best_j] = cluster["fused"]
         else:
             clusters.append({"boxes": [box], "scores": [score], "fused": box})
+            fused = np.vstack([fused, box[None, :]])
 
     fused_boxes = np.asarray([c["fused"] for c in clusters], dtype=np.float32)
     fused_scores = np.asarray([float(np.mean(c["scores"])) for c in clusters], dtype=np.float32)

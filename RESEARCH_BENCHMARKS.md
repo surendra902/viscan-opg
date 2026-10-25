@@ -117,25 +117,36 @@ What can be said without overreach:
 
 ```
 Faster R-CNN R50-FPN-V2 @800×1333 ──┐
-                                    ├─ per-model hflip TTA ─ class-wise NMS ─ WBF (IoU 0.55) ─ val-selected τ ─ test
-RetinaNet   R50-FPN-V2 @800×1333 ──┘
+                                    ├─ full-image + native-scale tiled views ─ hflip TTA ─ NMS ─ WBF (IoU 0.55)
+RetinaNet   R50-FPN-V2 @800×1333 ──┘        │
+                                            ├─ ConvNeXt-Tiny crop refiner (rescore / reclass) ─ val-selected τ ─ test
 ```
 
 - **Members:** the deployed Faster R-CNN checkpoint and a RetinaNet trained on the identical split, seed,
   schedule and input scale (`configs/retinanet.yaml`). Both torchvision, BSD-3-Clause.
+- **Views:** each detector runs on the full image and on overlapping 800×800 native-scale crops
+  (`slice_inference.py`). Full-image inference downscales DENTEX images by 0.425–0.675× (mean 0.474×);
+  800×800 crops are processed at 1:1 inside `min_size=800, max_size=1333`, so lesion pixels are not thrown away.
 - **TTA:** original + horizontally flipped inference, boxes mirrored back, merged with class-wise NMS.
 - **Fusion:** weighted box fusion, the rule used by He et al. and DETDet.
+- **Refiner:** a ConvNeXt-Tiny classifier trained on train-split GT crops (positives) and IoU<0.05 random
+  crops (background) re-scores boxes as `sqrt(det_score × p_class)`; a second variant also re-labels the box
+  and drops boxes whose argmax is background. It targets the two measured error modes: `deep_caries`→`caries`
+  confusion and `caries` background false positives.
 - **Threshold:** still selected only on the 70-image validation split, then applied once to the test split.
-- **Deployment posture:** the app keeps the single Faster R-CNN model; the ensemble is a benchmark artifact
-  unless its measured test gain justifies the doubled CPU cost. Fusion latency is the sum of member latencies
-  and is not measured by `evaluate.py`.
+- **Deployment posture:** the app keeps the single Faster R-CNN model; every added stage is a benchmark artifact
+  unless its measured test gain justifies the extra CPU cost. Sliced inference multiplies forward passes by the
+  tile count (~10 per image at 2830×1367), which is recorded per run in `slice_meta_<split>.json`.
 
 Evidence for each component, and what is *not* evidence:
 
 - WBF and ensembles appear in two top-five diagnosis entries → grounds the fusion choice.
 - TTA has **no DENTEX evidence** in the sources reviewed; it is included as a measured ablation, not as an
   expected win.
-- The claim that this ensemble beats our 0.496 AP50 is **unverified** until the notebook is run. Nothing in
+- Slicing has external evidence on other domains (SAHI, arXiv 2202.06934: +6.8 AP FCOS, +5.1 VFNet,
+  +5.3 TOOD on VisDrone/xView). It has **no DENTEX evidence** here; it is a measured ablation.
+- The crop refiner is a standard two-stage pattern, but no published DENTEX entry reports this exact rescorer.
+- The claim that any of this beats our 0.496 AP50 is **unverified** until the notebook is run. Nothing in
   this document asserts it.
 
 ## 7. Experiment ladder and decision rule
@@ -145,9 +156,14 @@ Evidence for each component, and what is *not* evidence:
 | E1 | Architecture: RetinaNet vs Faster R-CNN | `train.py --config configs/retinanet.yaml`, then `evaluate.py --select_threshold val --skip_variant` | Adopt RetinaNet only if test AP50 or AP improves; report the loss otherwise. |
 | E2 | hflip TTA ablation | `evaluate.py ... --tta hflip --dump_predictions preds_a` | Keep only if test AP50/AP improves; latency doubles by construction. |
 | E3 | WBF ensemble | `ensemble_wbf.py` over the two members' dumps | Adopt for benchmark if AP50/AP improves; adopt for deployment only if latency is acceptable. |
-| E4 | Tooth → finding cascade (deferred) | requires enumeration labels + API `tooth_fdi` | Revisit after E1–E3. |
+| E4 | Native-scale sliced inference | `slice_inference.py --views both --tile 800 --overlap 0.25`, fuse with `ensemble_wbf.py` | Keep only if fused AP50/AP improves over E2/E3 on test. |
+| E5 | ConvNeXt-Tiny crop refiner | `cascade_refine.py build/train/apply`, fuse the rescored dump | Keep only if fused AP50/AP improves; `reclass` must also not lower per-class AP. |
+| E6 | Tooth → finding cascade (deferred) | requires enumeration labels + API `tooth_fdi` | Revisit after E1–E5. |
 
-The Kaggle notebook `kaggle_benchmark_notebook.ipynb` runs E1–E3 in one session and prints the comparison
+Pipeline selection uses **validation mAP only**; the test split is read once per pipeline at the end. The notebook
+reports every measured row, including the ones that lost.
+
+The Kaggle notebook `kaggle_beat_benchmark_notebook.ipynb` runs E1–E5 in one session and prints the comparison
 table from the JSON files each run writes.
 
 ## 8. Licences
@@ -160,7 +176,8 @@ table from the JSON files each run writes.
 
 - No state-of-the-art claim on DENTEX or on our split.
 - No claim that our 50-image test results are comparable to the challenge's 250-image test results.
-- No claim that TTA or WBF improves our metrics until the measured JSON says so.
+- No claim that TTA, WBF, slicing or the crop refiner improves our metrics until the measured JSON says so.
+- No claim that sliced inference reproduces SAHI's reported gains; that evidence is from VisDrone/xView.
 - No claim about the leaders' exact training recipes beyond what the challenge report states.
 
 ## Sources
