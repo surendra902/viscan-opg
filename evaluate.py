@@ -72,6 +72,9 @@ def run_coco_map(coco_gt: COCO, detections: List[Dict[str, Any]]) -> Dict[str, A
         "map_small": float(stats[3]),
         "map_medium": float(stats[4]),
         "map_large": float(stats[5]),
+        "ar_1": float(stats[6]),
+        "ar_10": float(stats[7]),
+        "ar_100": float(stats[8]),
     }
 
     # Per-class AP
@@ -293,7 +296,23 @@ def _build_and_load(config_path: str, weights_path: str, device: torch.device):
     return cfg, model
 
 
-def _collect_predictions(coco_ref, images_dir: Path, detector_model, device):
+def _flip_xyxy(boxes: torch.Tensor, width: float) -> torch.Tensor:
+    """Mirrors xyxy boxes horizontally; width is the pixel width of the flipped tensor."""
+    flipped = boxes.clone()
+    flipped[:, 0] = width - boxes[:, 2]
+    flipped[:, 2] = width - boxes[:, 0]
+    return flipped
+
+
+def _nms_per_class(boxes: torch.Tensor, scores: torch.Tensor, labels: torch.Tensor,
+                   iou_thresh: float = 0.50, max_det: int = 300):
+    """Class-wise NMS used to merge original and horizontally flipped detections."""
+    from torchvision.ops import batched_nms
+    keep = batched_nms(boxes, scores, labels, iou_thresh)[:max_det]
+    return boxes[keep], scores[keep], labels[keep]
+
+
+def _collect_predictions(coco_ref, images_dir: Path, detector_model, device, tta: str = "none"):
     """Runs the detector over every image of a COCO split and returns detections."""
     dets = []
     preds_by_img = {}
@@ -311,12 +330,25 @@ def _collect_predictions(coco_ref, images_dir: Path, detector_model, device):
             first_tensor = tensor.detach().cpu()
 
         with torch.no_grad():
-            outputs = detector_model([tensor])
-            out = outputs[0]
+            out = detector_model([tensor])[0]
 
-        boxes = out["boxes"].cpu().numpy()
-        scores = out["scores"].cpu().numpy()
-        labels = out["labels"].cpu().numpy()
+        boxes = out["boxes"]
+        scores = out["scores"]
+        labels = out["labels"]
+
+        if tta == "hflip":
+            width = float(tensor.shape[-1])
+            flipped_tensor = torch.flip(tensor, dims=[-1])
+            with torch.no_grad():
+                flipped_out = detector_model([flipped_tensor])[0]
+            boxes = torch.cat([boxes, _flip_xyxy(flipped_out["boxes"], width)])
+            scores = torch.cat([scores, flipped_out["scores"]])
+            labels = torch.cat([labels, flipped_out["labels"]])
+            boxes, scores, labels = _nms_per_class(boxes, scores, labels)
+
+        boxes = boxes.cpu().numpy()
+        scores = scores.cpu().numpy()
+        labels = labels.cpu().numpy()
 
         img_preds = []
         for box, score, label in zip(boxes, scores, labels):
@@ -339,11 +371,19 @@ def _collect_predictions(coco_ref, images_dir: Path, detector_model, device):
     return dets, preds_by_img, first_tensor
 
 
+def _write_predictions(path: Path, dets: List[Dict[str, Any]]):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(dets, f)
+
+
 def sweep_threshold_on_val(
     weights_path: str,
     config_path: str,
     data_dir: str,
     device: torch.device,
+    tta: str = "none",
+    dump_dir: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Selects the operating threshold on the 70-image validation split only.
@@ -357,8 +397,10 @@ def sweep_threshold_on_val(
     coco_val = COCO(str(val_ann))
 
     _, model = _build_and_load(config_path, weights_path, device)
-    _, preds_by_img, _ = _collect_predictions(coco_val, val_images, model, device)
+    val_dets, preds_by_img, _ = _collect_predictions(coco_val, val_images, model, device, tta=tta)
     del model
+    if dump_dir:
+        _write_predictions(Path(dump_dir) / "predictions_val.json", val_dets)
 
     sweep = []
     best_threshold, best_f1 = 0.70, -1.0
@@ -384,13 +426,15 @@ def run_evaluation(
     data_dir: str = "data/dentex",
     output_dir: str = "evaluation_results",
     select_threshold: str = "none",
+    tta: str = "none",
+    dump_predictions: Optional[str] = None,
 ):
     """Executes the evaluation suite for any configured architecture."""
     out_path = Path(output_dir)
     out_path.mkdir(parents=True, exist_ok=True)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"[EVAL] Evaluating using device: {device}")
+    print(f"[EVAL] Evaluating using device: {device} | TTA: {tta}")
 
     base_cfg, model = _build_and_load(config_path, weights_path, device)
     model_name = base_cfg.get("model", {}).get("name", "unknown")
@@ -407,7 +451,12 @@ def run_evaluation(
 
     coco_gt = COCO(str(test_ann_file))
 
-    detections, predictions_by_img, sample_tensor = _collect_predictions(coco_gt, images_dir, model, device)
+    detections, predictions_by_img, sample_tensor = _collect_predictions(
+        coco_gt, images_dir, model, device, tta=tta
+    )
+    if dump_predictions:
+        _write_predictions(Path(dump_predictions) / "predictions_test.json", detections)
+        print(f"[DUMP] Wrote test predictions to {Path(dump_predictions) / 'predictions_test.json'}")
 
     # 1. COCO mAP metrics
     print(f"\n--- 1. COCO mAP Evaluation ({model_name}) ---")
@@ -417,7 +466,12 @@ def run_evaluation(
     threshold_info: Dict[str, Any] = {"mode": "fixed", "chosen_threshold": 0.70}
     chosen_tau = 0.70
     if select_threshold == "val":
-        threshold_info = {"mode": "val_sweep", **sweep_threshold_on_val(weights_path, config_path, data_dir, device)}
+        threshold_info = {
+            "mode": "val_sweep",
+            **sweep_threshold_on_val(
+                weights_path, config_path, data_dir, device, tta=tta, dump_dir=dump_predictions
+            ),
+        }
         chosen_tau = float(threshold_info["best_threshold"])
 
     print(f"\n--- 2. Confidence Threshold ({chosen_tau:.2f}) Precision / Recall / F1 ---")
@@ -431,7 +485,7 @@ def run_evaluation(
             var_cfg = yaml.safe_load(f)
         var_model = build_model_from_config(var_cfg, pretrained=False)
         load_model_weights(var_model, weights_path, device=device)
-        var_detections, _, _ = _collect_predictions(coco_gt, images_dir, var_model, device)
+        var_detections, _, _ = _collect_predictions(coco_gt, images_dir, var_model, device, tta=tta)
         variant_map_results = run_coco_map(coco_gt, var_detections)
         del var_model
 
@@ -454,6 +508,7 @@ def run_evaluation(
         "threshold_selection": threshold_info,
         "threshold_metrics": thresh_results,
         "cpu_latency_ms": round(cpu_latency, 2),
+        "tta": tta,
         "num_failure_cases_extracted": len(failures),
     }
 
@@ -477,6 +532,17 @@ if __name__ == "__main__":
         default="none",
         help="'val' selects the operating threshold by macro-F1 sweep on the validation split",
     )
+    parser.add_argument(
+        "--tta",
+        choices=["none", "hflip"],
+        default="none",
+        help="'hflip' merges original and horizontally flipped detections with class-wise NMS",
+    )
+    parser.add_argument(
+        "--dump_predictions",
+        default=None,
+        help="Directory for predictions_test.json (and predictions_val.json when --select_threshold val)",
+    )
     args = parser.parse_args()
     run_evaluation(
         args.weights,
@@ -485,4 +551,6 @@ if __name__ == "__main__":
         data_dir=args.data_dir,
         output_dir=args.output_dir,
         select_threshold=args.select_threshold,
+        tta=args.tta,
+        dump_predictions=args.dump_predictions,
     )

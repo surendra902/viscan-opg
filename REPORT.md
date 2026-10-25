@@ -77,6 +77,8 @@ The detector is **Faster R-CNN with a ResNet-50 FPN V2 backbone** (`43,271,528` 
 | **Fine-Tuned Checkpoint License** | **CC BY-NC-SA 4.0** (from DENTEX training data) | **AGPL-3.0 + CC BY-NC-SA 4.0** |
 | **Commercial Shipping Posture** | Code and pretrained initialization are cleared for commercial use; fine-tuned weights require retraining on commercial clinical data | Requires open-sourcing proprietary service code under AGPL-3.0 or purchasing an enterprise license, plus retraining on commercial data |
 
+**External benchmark context (verified, not a head-to-head):** the DENTEX 2023 challenge report lists diagnosis results of 36.48–37.6 AP for its top five entries and 33.2 AP for its Faster R-CNN reference run, measured on the 250-image hidden challenge test. Our 32.9 AP is measured on the 50-image public validation split, so the two are not directly comparable. [`RESEARCH_BENCHMARKS.md`](RESEARCH_BENCHMARKS.md) reproduces the leaderboard table, summarizes how the top entries were built, and records the BSD-only TTA + WBF benchmark path implemented in this repository.
+
 ---
 
 ## 4. Training Methodology

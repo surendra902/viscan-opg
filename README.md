@@ -338,12 +338,32 @@ Computes:
 - Measures CPU latency per image
 
 ### Architecture Comparison: RetinaNet
-`configs/retinanet.yaml` runs the same data, seed, schedule, and 800×1333 input with RetinaNet ResNet-50 FPN V2 (one-stage, focal loss) instead of Faster R-CNN, so the test metrics isolate the architecture. `kaggle_retinanet_notebook.ipynb` is a self-contained Kaggle GPU notebook that clones a pinned commit, prepares DENTEX, trains, evaluates with validation-only threshold selection (`--select_threshold val`), and writes the comparable metrics:
+`configs/retinanet.yaml` runs the same data, seed, schedule, and 800×1333 input with RetinaNet ResNet-50 FPN V2 (one-stage, focal loss) instead of Faster R-CNN, so the test metrics isolate the architecture. Get comparable metrics with:
 ```bash
 python train.py --config configs/retinanet.yaml
 python evaluate.py --weights checkpoints/retinanet/best_model.pth --config configs/retinanet.yaml --output_dir evaluation_retinanet --skip_variant --select_threshold val
 ```
-No RetinaNet result is reported until that run completes; the notebook's comparison table marks the Faster R-CNN column as reference values from `REPORT.md`.
+`RESEARCH_BENCHMARKS.md` records the verified DENTEX 2023 leaderboard numbers, how the top entries were built, and where this model sits relative to them (with the split differences stated).
+
+### Test-Time Augmentation and WBF Ensemble
+```bash
+# hflip TTA for any configured detector; also dumps predictions for fusion
+python evaluate.py --weights checkpoints/best_model.pth --data_dir data/dentex \
+  --output_dir evaluation_tta --skip_variant --select_threshold val \
+  --tta hflip --dump_predictions preds_frcnn_tta
+
+# weighted box fusion of two detectors, threshold re-selected on the validation split
+python ensemble_wbf.py \
+  --gt data/dentex/annotations/instances_test.json --images_dir data/dentex/images/test \
+  --preds preds_frcnn/predictions_test.json preds_retinanet/predictions_test.json \
+  --val-gt data/dentex/annotations/instances_val.json \
+  --val-preds preds_frcnn/predictions_val.json preds_retinanet/predictions_val.json \
+  --output_dir evaluation_ensemble
+```
+`evaluate.py` reports single-pass CPU latency; the ensemble's wall-clock is the sum of its members' latencies and is not measured by the fusion script.
+
+### Kaggle Benchmark Notebook
+`kaggle_benchmark_notebook.ipynb` runs the full comparison in one GPU session: it verifies the held-out split, validates the downloaded Faster R-CNN checkpoint against its published SHA-256, evaluates Faster R-CNN with and without TTA, trains and evaluates RetinaNet, fuses both with WBF, and prints the comparison table from the JSON files. It reports no metric that the run did not produce. No RetinaNet or ensemble result is claimed in this repository until that run completes.
 
 ---
 
