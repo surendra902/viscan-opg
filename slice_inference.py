@@ -235,8 +235,10 @@ def main() -> None:
                         help="hflip TTA on the full-image view")
     parser.add_argument("--tile_tta", choices=["none", "hflip"], default="none",
                         help="hflip TTA on tiles (doubles tile cost)")
-    parser.add_argument("--max_dets", type=int, default=100,
-                        help="Per-view detections fed into the model; applied to every view")
+    parser.add_argument("--max_dets_full", type=int, default=300,
+                        help="Detections kept for the full-image view (COCO evaluates 100 per class)")
+    parser.add_argument("--max_dets_tile", type=int, default=100,
+                        help="Detections kept per tile")
     parser.add_argument("--limit", type=int, default=0, help="Only first N images (smoke test)")
     args = parser.parse_args()
 
@@ -255,13 +257,14 @@ def main() -> None:
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"[SLICE] split={args.split} images={len(image_paths)} device={device} views={args.views}")
-    model = _load_model(args.config, args.weights, device, max_dets_per_view=args.max_dets)
+    model = _load_model(args.config, args.weights, device,
+                        max_dets_per_view=max(args.max_dets_full, args.max_dets_tile))
     detect_fn = _make_detect_fn(model, device)
 
     dumps, meta = run_split(
         detect_fn, image_paths, views=args.views, tile=args.tile, overlap=args.overlap,
         tta=args.tta, tile_tta=args.tile_tta,
-        max_dets_full=args.max_dets, max_dets_tile=args.max_dets,
+        max_dets_full=args.max_dets_full, max_dets_tile=args.max_dets_tile,
         score_floor=0.001,
     )
 

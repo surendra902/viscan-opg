@@ -367,7 +367,7 @@ DENTEX images are 1,976–3,139 px wide; full-image inference downscales them by
 ```bash
 python slice_inference.py --weights checkpoints/best_model.pth --config configs/baseline.yaml \
   --split val --data_dir data/dentex --output_dir preds_slice --views both \
-  --tile 800 --overlap 0.25 --tta hflip --max_dets 100
+  --tile 800 --overlap 0.25 --tta hflip --max_dets_tile 100
 
 python ensemble_wbf.py \
   --gt data/dentex/annotations/instances_test.json --images_dir data/dentex/images/test \
