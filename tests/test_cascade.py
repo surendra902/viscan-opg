@@ -118,11 +118,14 @@ def test_apply_cascade_rescore_preserves_boxes_and_orders_scores(tmp_path):
 
     out = json.loads((tmp_path / "out" / "predictions_val_rescore.json").read_text())
     assert meta["num_input"] == 2 and meta["num_output"] == 2
-    assert [d["bbox"] for d in out] == [d["bbox"] for d in dets]
-    assert [d["category_id"] for d in out] == [d["category_id"] for d in dets]
-    for before, after in zip(dets, out):
+    # Per-class trimming groups the dump by category, so compare order-insensitively.
+    before = sorted(dets, key=lambda d: d["bbox"])
+    after = sorted(out, key=lambda d: d["bbox"])
+    assert [d["bbox"] for d in after] == [d["bbox"] for d in before]
+    assert [d["category_id"] for d in after] == [d["category_id"] for d in before]
+    for b, a in zip(before, after):
         # score = sqrt(det_score * p), p in (0, 1]
-        assert 0.0 < after["score"] <= np.sqrt(before["score"]) + 1e-6
+        assert 0.0 < a["score"] <= np.sqrt(b["score"]) + 1e-6
 
 
 def test_apply_cascade_reclass_can_drop_background(tmp_path, monkeypatch):

@@ -365,6 +365,17 @@ def apply_cascade(
     for det in dets:
         by_image[int(det["image_id"])].append(det)
 
+    # Keep the strongest `max_dets` boxes per image and category. COCO evaluation
+    # truncates to 100 per category anyway, so this only bounds work.
+    if max_dets > 0:
+        for image_id, items in by_image.items():
+            picked: List[Dict] = []
+            for category_id in sorted({int(d["category_id"]) for d in items}):
+                group = [d for d in items if int(d["category_id"]) == category_id]
+                group.sort(key=lambda d: -float(d["score"]))
+                picked.extend(group[:max_dets])
+            by_image[image_id] = picked
+
     out: List[Dict] = []
     t0 = time.perf_counter()
     dropped_bg = 0
@@ -417,7 +428,9 @@ def apply_cascade(
         "output": str(dump),
         "context": context,
         "crop_size": size,
+        "max_dets_per_image_class": max_dets,
         "num_input": len(dets),
+        "num_considered": sum(len(v) for v in by_image.values()),
         "num_output": len(out),
         "dropped_background": dropped_bg,
         "relabelled": changed_label,
