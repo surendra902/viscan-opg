@@ -44,3 +44,25 @@ def test_model_forward_eval():
     assert "boxes" in out
     assert "labels" in out
     assert "scores" in out
+
+
+def test_retinanet_initialization_and_forward():
+    """Verify the RetinaNet comparison architecture builds a 5-class head and predicts."""
+    model = get_detector_model(
+        name="retinanet_resnet50_fpn_v2",
+        num_classes=NUM_CLASSES,
+        pretrained=False,
+        min_size=128,
+        max_size=128,
+        box_detections_per_img=50,
+    )
+    model.eval()
+    assert model.head.classification_head.num_classes == 5
+
+    with torch.no_grad():
+        outputs = model([torch.rand((3, 128, 160), dtype=torch.float32)])
+
+    out = outputs[0]
+    assert set(out.keys()) == {"boxes", "labels", "scores"}
+    assert out["boxes"].shape[1] == 4
+    assert out["labels"].max().item() <= 4

@@ -223,7 +223,7 @@ def plot_curves(history: Dict[str, List[float]], output_dir: Path):
     plt.close()
 
 
-def train(config_path: str):
+def train(config_path: str, epochs_override: int = None):
     """Main training routine."""
     with open(config_path, "r") as f:
         config = yaml.safe_load(f)
@@ -283,6 +283,9 @@ def train(config_path: str):
     )
 
     epochs = train_cfg.get("epochs", 12)
+    if epochs_override:
+        print(f"[INFO] --epochs override: {epochs} -> {epochs_override} (not the reported protocol)")
+        epochs = epochs_override
     scheduler_name = train_cfg.get("lr_scheduler", "CosineAnnealingLR")
     if scheduler_name == "CosineAnnealingLR":
         eta_min_factor = train_cfg.get("lr_eta_min_factor", 0.01)
@@ -338,10 +341,13 @@ def train(config_path: str):
             scaler.update()
 
             epoch_losses.append(losses.item())
-            if "loss_classifier" in loss_dict:
-                cls_losses.append(loss_dict["loss_classifier"].item())
-            if "loss_box_reg" in loss_dict:
-                reg_losses.append(loss_dict["loss_box_reg"].item())
+            # Faster R-CNN: loss_classifier / loss_box_reg; RetinaNet: classification / bbox_regression
+            cls_key = next((k for k in ("loss_classifier", "classification") if k in loss_dict), None)
+            reg_key = next((k for k in ("loss_box_reg", "bbox_regression") if k in loss_dict), None)
+            if cls_key is not None:
+                cls_losses.append(loss_dict[cls_key].item())
+            if reg_key is not None:
+                reg_losses.append(loss_dict[reg_key].item())
 
             if (i + 1) % 50 == 0 or (i + 1) == len(train_loader):
                 cur_lr = optimizer.param_groups[0]['lr']
@@ -387,5 +393,11 @@ def train(config_path: str):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default="configs/baseline.yaml", help="Path to config yaml")
+    parser.add_argument(
+        "--epochs",
+        type=int,
+        default=None,
+        help="Override epoch count for smoke tests only; omit for the reported protocol",
+    )
     args = parser.parse_args()
-    train(args.config)
+    train(args.config, epochs_override=args.epochs)

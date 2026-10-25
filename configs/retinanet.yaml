@@ -1,0 +1,48 @@
+# Viscan OPG Architecture-Comparison Configuration: RetinaNet ResNet-50 FPN V2 (800x1333)
+# One-stage, focal-loss detector. Same data, seed, schedule and input scale as the
+# Faster R-CNN baseline so the comparison isolates the architecture.
+# License: Code BSD-3-Clause (torchvision); weights trained on DENTEX CC BY-NC-SA 4.0
+
+seed: 42
+
+data:
+  dataset_name: "DENTEX"
+  source: "huggingface.co/datasets/ibrahimhamamci/DENTEX"
+  data_licence: "CC BY-NC-SA 4.0"
+  data_dir: "data/dentex"
+  categories:
+    0: "background"
+    1: "impacted_tooth"
+    2: "caries"
+    3: "periapical_lesion"
+    4: "deep_caries"
+  num_classes: 5
+
+training:
+  batch_size: 2
+  num_workers: 2
+  epochs: 12
+  lr: 0.005
+  momentum: 0.9
+  weight_decay: 0.0005
+  lr_scheduler: "CosineAnnealingLR"
+  lr_eta_min_factor: 0.01
+  augmentation: "HFlip(0.5)+ColorJitter(brightness=0.15,contrast=0.15)"
+  amp: true
+  checkpoint_dir: "checkpoints/retinanet"
+  output_dir: "runs/retinanet"
+
+model:
+  name: "retinanet_resnet50_fpn_v2"
+  weights: "RetinaNet_ResNet50_FPN_V2_Weights.COCO_V1"
+  code_licence: "BSD-3-Clause"
+  min_size: 800
+  max_size: 1333
+  box_score_thresh: 0.001
+  box_detections_per_img: 300
+  box_nms_thresh: 0.5
+
+evaluation:
+  ui_confidence_threshold: 0.70
+  iou_threshold: 0.50
+  max_dets: [1, 10, 100]

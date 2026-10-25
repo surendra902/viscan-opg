@@ -1,17 +1,21 @@
 """
-Model definition for Viscan OPG.
+Model definitions for Viscan OPG.
 
-Architecture: Faster R-CNN with ResNet-50 FPN V2 backbone.
+Architectures (selected by `model.name` in the config):
+- fasterrcnn_resnet50_fpn_v2  (deployed baseline)
+- retinanet_resnet50_fpn_v2   (architecture-comparison experiment)
+
 Pretraining: COCO_V1 weights from torchvision.
 Classes: 5 classes (0: background, 1: impacted_tooth, 2: caries, 3: periapical_lesion, 4: deep_caries).
 
 License:
-- Code & architecture: BSD-3-Clause (torchvision)
+- Code & architecture: BSD-3-Clause (torchvision) for both detectors.
 - Fine-tuned weights: Trained on DENTEX (CC BY-NC-SA 4.0).
   Commercial deployment requires retraining on a permissively licensed dataset
   or explicit permission from the DENTEX consortium.
 """
 
+from functools import partial
 from typing import Dict, Any, Optional
 import torch
 import torch.nn as nn
@@ -20,13 +24,19 @@ try:
     from torchvision.models.detection import (
         fasterrcnn_resnet50_fpn_v2,
         FasterRCNN_ResNet50_FPN_V2_Weights,
+        retinanet_resnet50_fpn_v2,
+        RetinaNet_ResNet50_FPN_V2_Weights,
     )
     from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
+    from torchvision.models.detection.retinanet import RetinaNetClassificationHead
     HAS_TORCHVISION = True
 except ImportError:
     fasterrcnn_resnet50_fpn_v2 = None
     FasterRCNN_ResNet50_FPN_V2_Weights = None
     FastRCNNPredictor = None
+    retinanet_resnet50_fpn_v2 = None
+    RetinaNet_ResNet50_FPN_V2_Weights = None
+    RetinaNetClassificationHead = None
     HAS_TORCHVISION = False
 
 CLASS_NAMES = {
@@ -52,11 +62,36 @@ def get_detector_model(
     rpn_pre_nms_top_n_test: int = 1000,
     rpn_post_nms_top_n_test: int = 1000,
     rpn_nms_thresh: float = 0.7,
+    name: str = "fasterrcnn_resnet50_fpn_v2",
 ) -> nn.Module:
     """
-    Constructs a Faster R-CNN ResNet-50 FPN V2 model with a custom prediction head
-    and explicit detector policy overrides.
+    Constructs a torchvision detection model with a custom 5-class head.
+
+    `name` selects the architecture:
+    - "fasterrcnn_resnet50_fpn_v2" (default): two-stage, RPN + FPN
+    - "retinanet_resnet50_fpn_v2": one-stage, focal loss
     """
+    if "retinanet" in name.lower():
+        weights = RetinaNet_ResNet50_FPN_V2_Weights.COCO_V1 if pretrained else None
+        model = retinanet_resnet50_fpn_v2(
+            weights=weights,
+            min_size=min_size,
+            max_size=max_size,
+            score_thresh=box_score_thresh,
+            nms_thresh=box_nms_thresh,
+            detections_per_img=box_detections_per_img,
+        )
+        # v2 uses GroupNorm(32) in the retinanet head; keep that norm for the new head
+        num_anchors = model.head.classification_head.num_anchors
+        in_channels = model.backbone.out_channels
+        model.head.classification_head = RetinaNetClassificationHead(
+            in_channels,
+            num_anchors,
+            num_classes,
+            norm_layer=partial(nn.GroupNorm, 32),
+        )
+        return model
+
     weights = FasterRCNN_ResNet50_FPN_V2_Weights.COCO_V1 if pretrained else None
 
     model = fasterrcnn_resnet50_fpn_v2(
@@ -83,6 +118,7 @@ def build_model_from_config(config: Dict[str, Any], pretrained: bool = True) -> 
     """Builds model from a parsed YAML config dict."""
     model_cfg = config.get("model", {})
     return get_detector_model(
+        name=model_cfg.get("name", "fasterrcnn_resnet50_fpn_v2"),
         num_classes=config.get("data", {}).get("num_classes", NUM_CLASSES),
         pretrained=pretrained,
         min_size=model_cfg.get("min_size", 800),

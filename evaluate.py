@@ -17,7 +17,7 @@ import time
 import yaml
 import argparse
 from pathlib import Path
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, List, Tuple, Optional
 
 import numpy as np
 import torch
@@ -285,28 +285,115 @@ def benchmark_cpu_latency(model, sample_tensor, iterations: int = 30) -> float:
     return float(np.mean(latencies))
 
 
+def _build_and_load(config_path: str, weights_path: str, device: torch.device):
+    with open(config_path, "r") as f:
+        cfg = yaml.safe_load(f)
+    model = build_model_from_config(cfg, pretrained=False)
+    load_model_weights(model, weights_path, device=device)
+    return cfg, model
+
+
+def _collect_predictions(coco_ref, images_dir: Path, detector_model, device):
+    """Runs the detector over every image of a COCO split and returns detections."""
+    dets = []
+    preds_by_img = {}
+    first_tensor = None
+    from torchvision import transforms
+    for img_id in sorted(coco_ref.imgs.keys()):
+        img_info = coco_ref.loadImgs(img_id)[0]
+        img_p = images_dir / img_info["file_name"]
+        if not img_p.exists():
+            continue
+
+        img = Image.open(img_p).convert("RGB")
+        tensor = transforms.functional.to_tensor(img).to(device)
+        if first_tensor is None:
+            first_tensor = tensor.detach().cpu()
+
+        with torch.no_grad():
+            outputs = detector_model([tensor])
+            out = outputs[0]
+
+        boxes = out["boxes"].cpu().numpy()
+        scores = out["scores"].cpu().numpy()
+        labels = out["labels"].cpu().numpy()
+
+        img_preds = []
+        for box, score, label in zip(boxes, scores, labels):
+            x_min, y_min, x_max, y_max = box
+            w = x_max - x_min
+            h = y_max - y_min
+            dets.append({
+                "image_id": img_id,
+                "category_id": int(label),
+                "bbox": [float(x_min), float(y_min), float(w), float(h)],
+                "score": float(score),
+            })
+            img_preds.append({
+                "category_id": int(label),
+                "bbox_xyxy": [float(x_min), float(y_min), float(x_max), float(y_max)],
+                "score": float(score),
+            })
+
+        preds_by_img[img_id] = img_preds
+    return dets, preds_by_img, first_tensor
+
+
+def sweep_threshold_on_val(
+    weights_path: str,
+    config_path: str,
+    data_dir: str,
+    device: torch.device,
+) -> Dict[str, Any]:
+    """
+    Selects the operating threshold on the 70-image validation split only.
+    Sweeps 0.10..0.90 (step 0.05) and maximizes macro-F1. The test split is
+    never touched here.
+    """
+    val_ann = Path(data_dir) / "annotations" / "instances_val.json"
+    val_images = Path(data_dir) / "images" / "val"
+    if not val_ann.exists():
+        raise FileNotFoundError(f"Validation annotations not found: {val_ann}")
+    coco_val = COCO(str(val_ann))
+
+    _, model = _build_and_load(config_path, weights_path, device)
+    _, preds_by_img, _ = _collect_predictions(coco_val, val_images, model, device)
+    del model
+
+    sweep = []
+    best_threshold, best_f1 = 0.70, -1.0
+    for thr in np.arange(0.10, 0.91, 0.05):
+        tau = float(round(thr, 2))
+        res = evaluate_threshold_metrics(coco_val, preds_by_img, conf_thresh=tau)
+        sweep.append({"threshold": tau, "macro_f1": res["macro_f1"]})
+        if res["macro_f1"] > best_f1:
+            best_threshold, best_f1 = tau, res["macro_f1"]
+
+    print(f"[VAL] Selected threshold {best_threshold:.2f} (val macro-F1={best_f1:.3f})")
+    return {
+        "best_threshold": best_threshold,
+        "best_val_macro_f1": round(float(best_f1), 4),
+        "sweep": sweep,
+    }
+
+
 def run_evaluation(
     weights_path: str,
-    baseline_config_path: str = "configs/baseline.yaml",
-    variant_config_path: str = "configs/inference_variant.yaml",
+    config_path: str = "configs/baseline.yaml",
+    variant_config_path: Optional[str] = "configs/inference_variant.yaml",
     data_dir: str = "data/dentex",
     output_dir: str = "evaluation_results",
+    select_threshold: str = "none",
 ):
-    """Executes full evaluation suite including baseline and resolution variant."""
+    """Executes the evaluation suite for any configured architecture."""
     out_path = Path(output_dir)
     out_path.mkdir(parents=True, exist_ok=True)
-
-    with open(baseline_config_path, "r") as f:
-        base_cfg = yaml.safe_load(f)
-    with open(variant_config_path, "r") as f:
-        var_cfg = yaml.safe_load(f)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"[EVAL] Evaluating using device: {device}")
 
-    # Build model and load weights
-    model = build_model_from_config(base_cfg, pretrained=False)
-    load_model_weights(model, weights_path, device=device)
+    base_cfg, model = _build_and_load(config_path, weights_path, device)
+    model_name = base_cfg.get("model", {}).get("name", "unknown")
 
     # Load held-out test annotations (fall back to instances_val.json only if instances_test.json is absent)
     test_ann_file = Path(data_dir) / "annotations" / "instances_test.json"
@@ -320,69 +407,35 @@ def run_evaluation(
 
     coco_gt = COCO(str(test_ann_file))
 
-    def _collect_predictions(detector_model):
-        dets = []
-        preds_by_img = {}
-        first_tensor = None
-        from torchvision import transforms
-        for img_id in sorted(coco_gt.imgs.keys()):
-            img_info = coco_gt.loadImgs(img_id)[0]
-            img_p = images_dir / img_info["file_name"]
-            if not img_p.exists():
-                continue
+    detections, predictions_by_img, sample_tensor = _collect_predictions(coco_gt, images_dir, model, device)
 
-            img = Image.open(img_p).convert("RGB")
-            tensor = transforms.functional.to_tensor(img).to(device)
-            if first_tensor is None:
-                first_tensor = tensor.detach().cpu()
-
-            with torch.no_grad():
-                outputs = detector_model([tensor])
-                out = outputs[0]
-
-            boxes = out["boxes"].cpu().numpy()
-            scores = out["scores"].cpu().numpy()
-            labels = out["labels"].cpu().numpy()
-
-            img_preds = []
-            for box, score, label in zip(boxes, scores, labels):
-                x_min, y_min, x_max, y_max = box
-                w = x_max - x_min
-                h = y_max - y_min
-                dets.append({
-                    "image_id": img_id,
-                    "category_id": int(label),
-                    "bbox": [float(x_min), float(y_min), float(w), float(h)],
-                    "score": float(score),
-                })
-                img_preds.append({
-                    "category_id": int(label),
-                    "bbox_xyxy": [float(x_min), float(y_min), float(x_max), float(y_max)],
-                    "score": float(score),
-                })
-
-            preds_by_img[img_id] = img_preds
-        return dets, preds_by_img, first_tensor
-
-    # Run inference for all test images using baseline model
-    detections, predictions_by_img, sample_tensor = _collect_predictions(model)
-
-    # 1. COCO mAP metrics (Baseline)
-    print("\n--- 1. COCO mAP Evaluation (Baseline) ---")
+    # 1. COCO mAP metrics
+    print(f"\n--- 1. COCO mAP Evaluation ({model_name}) ---")
     map_results = run_coco_map(coco_gt, detections)
 
-    # 2. Threshold-based P/R/F1 & Confusion Matrix
-    print("\n--- 2. Confidence Threshold (0.70) Precision / Recall / F1 ---")
-    thresh_results = evaluate_threshold_metrics(coco_gt, predictions_by_img, conf_thresh=0.70)
+    # 2. Operating threshold: fixed 0.70, or selected on validation only
+    threshold_info: Dict[str, Any] = {"mode": "fixed", "chosen_threshold": 0.70}
+    chosen_tau = 0.70
+    if select_threshold == "val":
+        threshold_info = {"mode": "val_sweep", **sweep_threshold_on_val(weights_path, config_path, data_dir, device)}
+        chosen_tau = float(threshold_info["best_threshold"])
 
-    # 3. Controlled Resolution Variant Evaluation (960x1600 vs 800x1333)
-    print("\n--- 3. Resolution Variant Evaluation ---")
-    var_model = build_model_from_config(var_cfg, pretrained=False)
-    load_model_weights(var_model, weights_path, device=device)
-    var_detections, _, _ = _collect_predictions(var_model)
-    variant_map_results = run_coco_map(coco_gt, var_detections)
+    print(f"\n--- 2. Confidence Threshold ({chosen_tau:.2f}) Precision / Recall / F1 ---")
+    thresh_results = evaluate_threshold_metrics(coco_gt, predictions_by_img, conf_thresh=chosen_tau)
 
-    # 4. CPU Latency Benchmark (on real test radiograph tensor if available)
+    # 3. Optional resolution-variant evaluation (same weights, different input scale)
+    variant_map_results = None
+    if variant_config_path and Path(variant_config_path).exists():
+        print("\n--- 3. Resolution Variant Evaluation ---")
+        with open(variant_config_path, "r") as f:
+            var_cfg = yaml.safe_load(f)
+        var_model = build_model_from_config(var_cfg, pretrained=False)
+        load_model_weights(var_model, weights_path, device=device)
+        var_detections, _, _ = _collect_predictions(coco_gt, images_dir, var_model, device)
+        variant_map_results = run_coco_map(coco_gt, var_detections)
+        del var_model
+
+    # 4. CPU Latency Benchmark
     if sample_tensor is None:
         sample_tensor = torch.zeros((3, 800, 1333), dtype=torch.float32)
     cpu_latency = benchmark_cpu_latency(model, sample_tensor)
@@ -390,14 +443,15 @@ def run_evaluation(
 
     # 5. Failure cases
     print("\n--- 5. Extracting Failure Cases ---")
-    failures = extract_failure_cases(coco_gt, images_dir, predictions_by_img, out_path / "failures", conf_thresh=0.70)
+    failures = extract_failure_cases(coco_gt, images_dir, predictions_by_img, out_path / "failures", conf_thresh=chosen_tau)
 
-    # Combine into comprehensive results
     final_report = {
-        "model": "Faster R-CNN ResNet-50 FPN V2",
+        "model": model_name,
+        "config": config_path,
         "weights": weights_path,
         "coco_map": map_results,
         "variant_coco_map": variant_map_results,
+        "threshold_selection": threshold_info,
         "threshold_metrics": thresh_results,
         "cpu_latency_ms": round(cpu_latency, 2),
         "num_failure_cases_extracted": len(failures),
@@ -413,6 +467,22 @@ def run_evaluation(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--weights", required=True, help="Path to trained checkpoint (.pth)")
+    parser.add_argument("--config", default="configs/baseline.yaml", help="Model config used for training")
     parser.add_argument("--data_dir", default="data/dentex", help="Dataset directory")
+    parser.add_argument("--output_dir", default="evaluation_results", help="Directory for metrics JSON")
+    parser.add_argument("--skip_variant", action="store_true", help="Skip the 960x1600 resolution-variant block")
+    parser.add_argument(
+        "--select_threshold",
+        choices=["none", "val"],
+        default="none",
+        help="'val' selects the operating threshold by macro-F1 sweep on the validation split",
+    )
     args = parser.parse_args()
-    run_evaluation(args.weights, data_dir=args.data_dir)
+    run_evaluation(
+        args.weights,
+        config_path=args.config,
+        variant_config_path=None if args.skip_variant else "configs/inference_variant.yaml",
+        data_dir=args.data_dir,
+        output_dir=args.output_dir,
+        select_threshold=args.select_threshold,
+    )
