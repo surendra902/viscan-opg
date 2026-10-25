@@ -15,6 +15,10 @@ Upload a dental panoramic X-ray (OPG). The app draws coloured boxes around possi
 | `periapical_lesion` | An infection or dark area at the tip of a tooth root |
 | `impacted_tooth` | A tooth stuck under the gum or bone |
 
+![Sample OPG: ground truth in green, model predictions in red](assets/eval/sample_detections.png)
+
+*One test scan. Green is what the annotators marked; red is what the model found.*
+
 This is a decision-support prototype built for the Viscan AI Engineer take-home assignment. It is meant to help a dentist take a second look. It does not replace a dentist, and the disclaimer appears in the UI, the JSON and the annotated report.
 
 **Quick links**
@@ -63,39 +67,11 @@ The live demo runs this same FastAPI app on a free CPU server. On that server th
 
 ## 2. How well does it work?
 
-I tested on **50 X-rays that the model never saw during training or tuning** (182 labelled findings in total). Here is the honest picture, using a confidence threshold of 0.70 (the app only shows findings it is at least 70% sure about):
+On 50 X-rays that the model never saw during training or tuning (182 labelled findings) it reaches **mAP@50 0.496** and **mAP@50:95 0.329**. The app defaults to a confidence of 0.70, chosen on a separate 70-image validation set; at that setting the average F1 across the four classes is 0.402 on test.
 
-| Finding | Found correctly | False alarms | Precision | Recall | F1 | What this means |
-|---|---:|---:|---:|---:|---:|---|
-| Impacted tooth | 35 of 40 | 11 | 76.1% | 87.5% | 0.81 | Good. |
-| Caries | 54 of 101 | 141 | 27.7% | 53.5% | 0.37 | Finds about half but raises many false alarms. |
-| Deep caries | 6 of 32 | 8 | 42.9% | 18.8% | 0.26 | Weak. Another 14 are located correctly but labelled as ordinary caries. |
-| Periapical lesion | 1 of 9 | 2 | 33.3% | 11.1% | 0.17 | Weak. Only 144 training examples, so the model rarely learned it. |
+Impacted teeth are usable (F1 0.81). Caries, deep caries and periapical lesions are weak (F1 0.37, 0.26 and 0.17), so treat the output as a highlighter, not a filter. On a 2-core CPU an image takes about 4.6 seconds.
 
-(Precision = of the findings shown, how many were right. Recall = of the real findings, how many were found. F1 combines the two.)
-
-**Overall detection scores (standard COCO metrics, test set):**
-
-| Metric | Score |
-|---|---:|
-| mAP@50 | 0.496 |
-| mAP@50:95 (main metric) | 0.329 |
-| mAP@75 | 0.383 |
-
-| Class | AP@50 | AP@50:95 |
-|---|---:|---:|
-| Impacted tooth | 0.833 | 0.541 |
-| Deep caries | 0.457 | 0.302 |
-| Caries | 0.358 | 0.244 |
-| Periapical lesion | 0.336 | 0.230 |
-
-**For context:** the DENTEX 2023 challenge report lists 36.5-37.6 AP for its top five entries and 33.2 AP for its own Faster R-CNN reference run on a hidden 250-image test set. My 32.9 AP is measured on a different, public 50-image set, so the numbers are in the same range but not directly comparable.
-
-**Why 0.70?** I swept thresholds from 0.10 to 0.90 on a separate 70-image validation set. Macro-F1 peaked at 0.70 (0.556 on validation, 0.402 on the test set). The cost is that many uncertain but real findings are hidden. Lower the slider in the UI (or pass `confidence_threshold` to the API) to see more, with more false alarms.
-
-**Speed on CPU:** about 4.6 seconds per image on average (median 4.7 s, 95th percentile 4.9 s), measured on a 2-thread Kaggle Intel Xeon @ 2.0 GHz with a full-size 2892 x 1316 X-ray, using about 2.9 GB of memory. No GPU is needed. The sample JSON in Section 5 shows 8.3 s because it was recorded on a different, slower CPU.
-
-The confusion matrix, training curves and five detailed failure cases are in [REPORT.md](REPORT.md).
+Per-class scores, the confusion matrix, five failure cases, training curves, the model-versus-model comparison and every caveat are in [REPORT.md](REPORT.md), Sections 5 and 6.
 
 ---
 
@@ -214,7 +190,7 @@ curl -X POST "http://localhost:8000/analyze?confidence_threshold=0.70" \
      -F "file=@sample_opg.png"
 ```
 
-**Example response** (shortened to 2 of 8 findings; recorded on CPU from `samples/sample_01_val_1_report.json`):
+**Example response** (shortened to 2 of 8 findings; recorded on CPU from `samples/sample_01_val_1_report.json`. The 8.3 s here comes from a slower CPU than the 4.6 s benchmark in Section 2):
 
 ```json
 {
@@ -430,57 +406,13 @@ python train.py --config configs/baseline.yaml
 
 Outputs go to `runs/baseline/` (`loss_curve.png`, `val_ap_curve.png`) and `checkpoints/best_model.pth`.
 
-![Training curves](assets/eval/training_curves.png)
-
 ### Evaluate
 
 ```bash
 python evaluate.py --weights checkpoints/best_model.pth --data_dir data/dentex
 ```
 
-This computes overall and per-class mAP@50 and mAP@50:95, per-class precision/recall/F1 at the chosen threshold, the confusion matrix, five failure cases (saved to `evaluation_results/failures/`) and CPU speed per image.
-
-![Confusion matrix](assets/eval/confusion_matrix.png)
-
-### Confusion matrix (test set, threshold 0.70)
-
-Rows are the truth, columns are what the model said. "Missed" means the model found nothing there.
-
-| Truth \ Predicted | Missed | Impacted | Caries | Periapical | Deep caries |
-|---|---:|---:|---:|---:|---:|
-| **Nothing there (false alarm)** | - | 10 | 124 | 2 | 6 |
-| **Impacted tooth** | 5 | **35** | 0 | 0 | 0 |
-| **Caries** | 45 | 1 | **54** | 0 | 1 |
-| **Periapical lesion** | 4 | 0 | 3 | **1** | 1 |
-| **Deep caries** | 12 | 0 | 14 | 0 | **6** |
-
-Two patterns stand out. First, 14 of 32 deep caries are found in the right place but called "caries" (the line between shallow and deep is subjective). Second, caries causes 124 false alarms, mostly on low-contrast gaps between teeth and around fillings.
-
-### Five failure cases (test set)
-
-| # | Image | What went wrong | My explanation |
-|---|---|---|---|
-| 1 | `val_4` | False alarm: "impacted tooth" at 0.99 confidence, no such label in the ground truth | Wisdom-tooth angle and bone density near the jaw hinge looked like an impaction. The annotators did not mark it. |
-| 2 | `val_38` | Missed a periapical lesion | Very few training examples (144) and a faint dark area that blends into surrounding bone. |
-| 3 | `val_3` | Deep caries labelled as caries (score 0.97) | The box was in the right place, but the contrast near the pulp chamber is ambiguous. This is the most common mix-up (14 of the 20 class mix-ups). |
-| 4 | `val_33` | Missed a small caries | Tiny gap-between-teeth cavity, hidden by overlapping enamel and made smaller by shrinking the image to 0.47x. |
-| 5 | `val_13` | False alarm: "impacted tooth" at 0.99 | DENTEX only labels some impactions, so this is probably a label-noise case. |
-
-![Five failure cases](assets/eval/failure_cases.png)
-![Sample detections](assets/eval/sample_detections.png)
-
-### One improvement I tried: bigger input images
-
-I retrained with larger images (960 x 1600 instead of 800 x 1333). To fit in GPU memory I had to drop batch size from 2 to 1, so this tests resolution and batch size together.
-
-| Metric (test set) | Original | Bigger images | Change |
-|---|---:|---:|---:|
-| mAP@50 | **0.496** | 0.493 | -0.003 |
-| mAP@50:95 (main) | **0.329** | 0.313 | -0.016 |
-| mAP@75 (strict) | 0.383 | **0.410** | +0.027 |
-| AR@100 (recall) | **0.683** | 0.681 | -0.002 |
-
-Per class (AP@50): impacted tooth improved (0.833 to 0.915), caries was about equal (0.358 vs 0.366), periapical was about equal (0.336 vs 0.328), but deep caries got worse (0.457 to 0.365). Bigger images sharpened box positions but did not help overall, so **I kept the original model**.
+This computes overall and per-class mAP@50 and mAP@50:95, per-class precision/recall/F1 at the chosen threshold, the confusion matrix, five failure cases (saved to `evaluation_results/failures/`) and CPU speed per image. The test-set numbers are in [REPORT.md](REPORT.md) §5, the confusion matrix in §5.3, and the five failure cases in §6.1.
 
 ### Why I haven't claimed more
 
@@ -510,27 +442,9 @@ CBCT is a 3D scan of the jaw. The same app accepts it, segments five structures 
 
 The model's own accuracy on the Post scan (model output compared with the reference mask) was a mean Dice of 0.964: maxilla 0.977, mandible 0.985, upper teeth 0.987, lower teeth 0.975, mandibular canal 0.897. These were measured in an executed Kaggle notebook, and the shipped Post demo labels are the reference mask itself, not a model prediction.
 
-**Speed and memory.**
+**Speed and memory.** One full model run on a Kaggle Tesla T4 (Post scan) takes 131.4 s of 3D inference over 252 tiles, 5.8 s of post-processing and distance work, and 0.9 s of meshing, with a peak of 4,936 MB of GPU memory and 2,642 MB of process RAM. The pre-segmented demo bundles skip the network: about 9.6 s (Post) and 10.4 s (Pre) per request on a local CPU, with about 250 MB extra RAM, so those figures are not comparable to the 131 s one. The Pre bundle's own `run_metrics.json` claims 115.9 s and 4,725 MB, but no executed notebook backs that run, so I do not rely on it. Full provenance and file hashes are in [`samples/cbct/PROVENANCE.md`](samples/cbct/PROVENANCE.md).
 
-*Full model run on a Kaggle Tesla T4 (Post scan):*
-
-| Stage | Measured |
-|---|---|
-| Model load | 2.1 s |
-| 3D inference (252 tiles, sliding window) | **131.4 s** |
-| Post-processing and distance | 5.8 s |
-| Meshing | 0.9 s |
-| Peak GPU memory | **4,936 MB** |
-| Process RAM | 2,642 MB |
-
-*Pre-segmented demo bundles on a local CPU (no model stage):* about 9.6 s (Post) and 10.4 s (Pre) per request, with about 250 MB extra RAM. These are not comparable to the 131 s figure because they skip the neural network.
-
-The Pre bundle's own `run_metrics.json` claims 115.9 s and 4,725 MB, but I have no executed notebook for that run, so I do not rely on those two numbers. Full provenance and file hashes are in [`samples/cbct/PROVENANCE.md`](samples/cbct/PROVENANCE.md).
-
-**Meshes.** The local sample files were made on a machine without `scikit-image`, so they use a simple fallback mesher and are large (28.7 MB and 35.1 MB). The Hugging Face Space installs `scikit-image` and uses Marching Cubes, which gives smaller files.
-
-![CBCT Post preview](assets/eval/cbct_ortho_preview.png)
-![CBCT Pre preview](assets/eval/cbct_ortho_pre_preview.png)
+**Meshes.** The local sample files were made on a machine without `scikit-image`, so they use a simple fallback mesher and are large (28.7 MB and 35.1 MB). The Hugging Face Space installs `scikit-image` and uses Marching Cubes, which gives smaller files. Cross-sections of both volumes are in [REPORT.md](REPORT.md) §8.
 
 **How I would run this in production (a design plan, not built or benchmarked):**
 
@@ -549,7 +463,22 @@ The Pre bundle's own `run_metrics.json` claims 115.9 s and 4,725 MB, but I have 
 
 ## 8. Extra experiments
 
-These scripts exist in the repo. **No result from the ensemble, sliced inference, or crop-refiner steps is claimed anywhere until a run completes**, and the table in `RESEARCH_BENCHMARKS.md` lists the verified DENTEX 2023 leaderboard figures for context.
+These scripts exist in the repo and were all run once on the same 635 / 70 / 50 split in one Kaggle session (`kaggle_beat_benchmark_notebook.ipynb`). Results on the 50 test images:
+
+| Setting | Test AP | Test AP50 | Change in AP50 |
+|---|---:|---:|---:|
+| **Baseline (shipped)** | 0.329 | 0.496 | - |
+| Higher resolution (960 x 1600) | 0.313 | 0.493 | -0.003 |
+| Mirror averaging (flip TTA) | 0.345 | 0.528 | +0.032 |
+| Native-scale tiles | 0.219 | 0.356 | -0.140 |
+| RetinaNet (undertrained) | 0.053 | 0.095 | -0.401 |
+| Tiles + RetinaNet fusion | 0.179 | 0.302 | -0.194 |
+| Tiles + crop checker (re-score) | 0.221 | 0.359 | -0.137 |
+| Tiles + RetinaNet + checker (re-score) | 0.194 | 0.317 | -0.179 |
+| Tiles + crop checker (re-label) | 0.170 | 0.272 | -0.224 |
+| Tiles + RetinaNet + checker (re-label) | 0.144 | 0.236 | -0.260 |
+
+Only mirror averaging beat the baseline on detection score. I still ship the single pass, because mirroring doubles the compute and its F1 at its own best threshold (0.399) is not better than the baseline (0.402). The larger-input run drew tighter boxes (mAP@75 0.383 to 0.410) and found impacted teeth better (AP@50 0.833 to 0.915), but lost on overall AP and on deep caries (0.457 to 0.365), and its batch size changed too, so resolution is not isolated. Per-class detail and the reasoning behind each row are in [REPORT.md](REPORT.md) §5.5; `RESEARCH_BENCHMARKS.md` lists the verified DENTEX 2023 leaderboard figures for context.
 
 **RetinaNet comparison.** `configs/retinanet.yaml` uses the same data, seed, schedule and image size, but RetinaNet (one-stage, focal loss) instead of Faster R-CNN, so test scores isolate the architecture.
 
