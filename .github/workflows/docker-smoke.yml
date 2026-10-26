@@ -1,0 +1,40 @@
+name: docker-smoke
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build and start the service
+        run: docker compose up -d --build viscan
+
+      - name: Wait for a loaded model on /health
+        run: |
+          for i in $(seq 1 90); do
+            if curl -fsS localhost:8000/health | grep -Eq '"model_loaded": ?true'; then
+              echo "model_loaded=true after $((i * 10))s"
+              curl -fsS localhost:8000/health
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Health never reported model_loaded=true"
+          docker compose logs viscan
+          exit 1
+
+      - name: End-to-end smoke test inside the image
+        run: docker compose exec -T viscan python scripts/smoke_test.py
+
+      - name: Image listing
+        if: always()
+        run: docker image ls
+
+      - name: Container logs on failure
+        if: failure()
+        run: docker compose logs --tail=200 viscan
