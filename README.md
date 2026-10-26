@@ -57,7 +57,7 @@ The live demo runs this same FastAPI app on a free CPU server. On that server th
 - **Accepts** PNG, JPG and single-frame 2D DICOM (`.dcm`) X-rays.
 - **Checks the file first.** For DICOM it applies the right brightness/contrast settings (Modality LUT and VOI LUT windowing) and flips "inverted" images (MONOCHROME1) so bones look right. It rejects blank images, screenshots, text documents, colour photos, corrupt files and multi-frame DICOMs with a clear error message instead of crashing.
 - **Finds** the four conditions above and returns the position of each in the original image's pixel coordinates, with a confidence score.
-- **Numbers the tooth.** Each finding carries an estimated two-digit FDI tooth number, from the box position against a geometry table fitted on DENTEX's own quadrant and tooth labels. It is labelled as an estimate everywhere it appears, because it is a position rule and not a tooth detector: on the validation split it is right on 0.976 of boxes for the quadrant and 0.543 for the exact number (Section 6).
+- **Numbers the tooth.** Each finding carries an estimated two-digit FDI tooth number — quadrant 1–4, then position 1–8 from the midline, so codes such as `24` or `47` rather than a 1–32 count — read from the box position against a geometry table fitted on DENTEX's own quadrant and tooth labels. It is labelled as an estimate everywhere it appears, because it is a position rule and not a tooth detector: on the validation split it is right on 0.976 of boxes for the quadrant and 0.543 for the exact number (Section 6).
 - **Draws** a box per finding, coloured by class and labelled with class name, confidence and the estimated tooth number.
 - **Reports** the findings as JSON and as a one-line summary, for example "8 findings: 5 caries, 3 impacted tooth."
 - **Shows** the original and annotated images side by side in a simple web page, with a confidence slider and download buttons.
@@ -232,7 +232,7 @@ curl -X POST "http://localhost:8000/analyze?confidence_threshold=0.70" \
 | `class` | One of `caries`, `deep_caries`, `periapical_lesion`, `impacted_tooth` |
 | `confidence` | How sure the model is, from 0 to 1 |
 | `bbox` | `[x_min, y_min, x_max, y_max]` in the original image's pixels |
-| `tooth_fdi` | Estimated FDI tooth number for that box (two digits: quadrant + tooth position), or `null` if no geometry table is fitted |
+| `tooth_fdi` | Estimated FDI tooth number for that box: two digits, quadrant 1–4 then position 1–8 from the midline, so the value is always in 11–18, 21–28, 31–38 or 41–48. `null` if no geometry table is fitted |
 | `tooth_fdi_basis` | Always `arch_geometry` today: the number comes from the box's position on the fitted arch, not from a tooth detector |
 | `tooth_numbering` | Provenance for those numbers: what they are, which split fitted them, and the held-out accuracy. `null` when `assets/fdi/fdi_geometry.json` is missing |
 | `inference_ms` | Time taken on the server, in milliseconds |
@@ -433,6 +433,17 @@ This computes overall and per-class mAP@50 and mAP@50:95, per-class precision/re
 
 ### Fitting the tooth numbers (`tooth_fdi`)
 
+**The numbering system first.** FDI — the notation DENTEX itself labels in — uses two digits per tooth, not a count from 1 to 32. The first digit is the quadrant, the second is the position within that quadrant counted from the midline: 1 central incisor, 2 lateral incisor, 3 canine, 4 first premolar, 5 second premolar, 6 first molar, 7 second molar, 8 third molar.
+
+| Quadrant digit | Region | Codes |
+|---|---|---|
+| 1 | upper right | 11–18 |
+| 2 | upper left | 21–28 |
+| 3 | lower left | 31–38 |
+| 4 | lower right | 41–48 |
+
+So `11` is the upper-right central incisor, `47` the lower-right second molar, and `48` the lower-right third molar — the highest code that exists. Quadrants are named for the patient, so quadrant 1 (upper right) is the left half of the film as you look at it — that is the convention DENTEX's own labels follow, and the fitted midline split reproduces it on 0.976 of validation boxes. A 32-tooth mouth therefore produces 32 two-digit codes rather than the numbers 1–32, and because a panoramic film images all four quadrants at once, one image can carry numbers as far apart as `16` and `45` and still be in range.
+
 DENTEX's diagnosis level has only four classes, but every box also carries a quadrant and a tooth position. I used those two axes to answer "which tooth is this finding on?" without training a second detector. `fdi.py` fits a geometry table and `scripts/dentex_fdi.py` builds it:
 
 1. **Fetch the labels.** `python scripts/dentex_fdi.py fetch` range-reads one member (1.2 MB of annotation JSON) out of the 10.9 GB `training_data.zip` over HTTP 206 responses, so it never downloads the archives.
@@ -446,8 +457,11 @@ Measured on ground-truth boxes of the validation split (339 boxes, all assigned 
 | Correct quadrant (right/left of midline **and** above/below the arch line) | 0.976 |
 | Correct tooth digit inside that quadrant | 0.549 |
 | Correct two-digit FDI number | 0.543 |
+| Correct quadrant **and** within one tooth position | 0.932 |
 
-Read this as the ceiling of the position estimator, not of the product. It is scored on expert boxes; on detected boxes it inherits every detection error, so a missed or misplaced lesion takes a correct number with it. The common failure is the neighbour: caries boxes often straddle two teeth, and an impacted tooth that never erupted has no correct FDI number in the first place. The fitted table ships as `assets/fdi/fdi_geometry.json` (5 kB of numbers), so a clean clone plus `python app.py` returns tooth numbers with no download step; if that file is missing the service leaves `tooth_fdi` as `null` rather than guessing.
+Where the 155 wrong boxes go: 132 are one tooth position off inside the correct quadrant, 15 are two positions off, and only 8 cross into another quadrant. The estimator is rarely on the wrong side of the mouth; it is often on the adjacent tooth.
+
+Read this as the ceiling of the position estimator, not of the product. It is scored on expert boxes; on detected boxes it inherits every detection error, so a missed or misplaced lesion takes a correct number with it. Two kinds of box have no hope of a clean number even before that: caries boxes often straddle two teeth, and an impacted tooth that never erupted has no correct FDI position in the first place. The fitted table ships as `assets/fdi/fdi_geometry.json` (5 kB of numbers), so a clean clone plus `python app.py` returns tooth numbers with no download step; if that file is missing the service leaves `tooth_fdi` as `null` rather than guessing.
 
 To re-measure without re-fitting:
 
@@ -625,9 +639,9 @@ python scripts/smoke_test.py
 
 `scripts/smoke_test.py` runs 9 checks against a live server and sends it 7 files: a bundled sample with findings (expects 200, at least one box, and an integer `tooth_fdi` plus a `tooth_numbering` provenance block on every finding), a sample with no findings (200 and an empty list), a text file (400), a corrupt DICOM (422, because it parses as a DICOM with no pixel data), a red 512 × 512 PNG that is not a dental X-ray (422), a continuous-tone grayscale 2:1 PNG (200 — the heuristic gate cannot tell it from a radiograph, so this check records the documented false accept) and a synthetic MONOCHROME1 DICOM carrying `DOE^JOHN` and `PHI-TEST-123` (200, and the check fails if either string appears anywhere in the response). It exits non-zero if any response differs. It needs the model loaded, so start the server first.
 
-Both were last run on this laptop on 26 October 2026 against `python app.py` on Windows: `pytest tests/ -q` ended `71 passed, 5 warnings in 17.85s` and `python scripts/smoke_test.py` ended `9 passed, 0 failed`.
+Both were last run on this laptop on 26 October 2026 against `python app.py` on Windows: `pytest tests/ -q` ended `71 passed, 5 warnings in 19.59s` and `python scripts/smoke_test.py` ended `9 passed, 0 failed`, with the tooth-number check reporting `8/8 findings carry an FDI number; basis=arch_geometry, held-out exact=0.5428`.
 
-The report's page limit is checked the same way as the code: `python scripts/render_report_pdf.py` re-renders `REPORT.md` through Chrome, prints where each page's content ends and exits non-zero if `REPORT.pdf` goes past four pages. Its last run printed `words: 2982  pages: 4`.
+The report's page limit is checked the same way as the code: `python scripts/render_report_pdf.py` re-renders `REPORT.md` through Chrome, prints where each page's content ends and exits non-zero if `REPORT.pdf` goes past four pages. Its last run printed `words: 3127  pages: 4`.
 
 ---
 
@@ -655,7 +669,7 @@ In short: the code and architecture could ship commercially, but the trained 2D 
 
 - Misses most periapical lesions and many deep caries at the default 0.70 setting.
 - Many caries false alarms on low-contrast gaps between teeth and around fillings.
-- `tooth_fdi` is a position estimate, not a tooth detection: it reads the box centre against a geometry table fitted on DENTEX train boxes, and it is only right on 0.543 of validation boxes (0.976 get the quadrant right). A wrong box or a wrong class carries the wrong number with it, and the annotated PNG says `(est)` for that reason.
+- `tooth_fdi` is a position estimate, not a tooth detection: it reads the box centre against a geometry table fitted on DENTEX train boxes, and it is only right on 0.543 of validation boxes (0.976 get the quadrant right, 0.932 get the quadrant and land within one tooth position). A wrong box or a wrong class carries the wrong number with it, and the annotated PNG says `(est)` for that reason. The number itself is always a legal FDI code — never 9 or 53 — but legal is not the same as correct.
 - The detector labels four findings only, because that is all DENTEX labels. No restorations, root-canal fillings, missing teeth or bone loss (Section 6 data card).
 - The test set is small (50 images), so per-class numbers are rough.
 - The "is this a dental X-ray?" check uses simple image rules (aspect ratio, colour, contrast, histogram), not a trained classifier, so unusual X-rays may be wrongly rejected.
