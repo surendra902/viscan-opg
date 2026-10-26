@@ -2,7 +2,7 @@
 
 Technical report for the AI Engineer (Round 2) take-home assessment. 2D OPG track, plus a bonus 3D CBCT track.
 
-**Candidate:** Surendra · **Date:** 26 October 2026 · **Code:** `main` at tag `submission` · **Experiments:** executed at `1ac1080` · **Weights:** `best_model.pth`, 173,466,789 bytes, SHA-256 `e0b49b12f48fc71ec1f583db08f107650659571e7c2b9cbd454dbfed13b46a1f` · **Demo:** [huggingface.co/spaces/surendra08/viscan-opg](https://huggingface.co/spaces/surendra08/viscan-opg) · **Video:** pending
+**Candidate:** Surendra · **Date:** 26 October 2026 · **Code:** `main` of [github.com/surendra902/viscan-opg](https://github.com/surendra902/viscan-opg) at this commit · **Experiments:** executed at `1ac1080` · **Weights:** `best_model.pth`, 173,466,789 bytes, SHA-256 `e0b49b12f48fc71ec1f583db08f107650659571e7c2b9cbd454dbfed13b46a1f` · **Demo:** [huggingface.co/spaces/surendra08/viscan-opg](https://huggingface.co/spaces/surendra08/viscan-opg) · **Video:** not recorded yet
 
 > **Clinical disclaimer:** AI-assisted findings for dentist review. Not a diagnosis. This build is not clinically ready and has not been validated on clinical data.
 
