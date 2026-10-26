@@ -502,6 +502,14 @@ def index_page():
           </thead>
           <tbody id="findingsBody"></tbody>
         </table>
+        <p id="fdiNote" style="font-size: 12px; color: var(--text-muted); margin-top: 8px; display: none;">
+          <strong>How to read the Tooth FDI column.</strong> FDI numbers each tooth with two digits, not a count from 1 to 32:
+          the first is the quadrant (1 upper right, 2 upper left, 3 lower left, 4 lower right) and the second is the position
+          from the midline, 1 central incisor through 8 third molar, so the codes run 11&ndash;18, 21&ndash;28, 31&ndash;38 and 41&ndash;48.
+          <em>47</em> is therefore a lower-right second molar and <em>48</em> is the highest code that exists. The value is a
+          position estimate from fitted arch geometry, not a tooth detection: on 339 held-out validation boxes it gets the
+          quadrant right 0.976 of the time, the quadrant plus one tooth position 0.932, and the exact code 0.543.
+        </p>
       </div>
 
       <div class="actions-bar" id="downloadBar" style="display: none; flex-wrap: wrap; gap: 10px;">
@@ -538,6 +546,7 @@ def index_page():
     const provenanceBanner = document.getElementById('provenanceBanner');
     const threeDNote = document.getElementById('threeDNote');
     const imageNote = document.getElementById('imageNote');
+    const fdiNote = document.getElementById('fdiNote');
     const cbctReadiness = document.getElementById('cbctReadiness');
 
     const SOURCE_LABELS = {
@@ -574,6 +583,7 @@ def index_page():
         downloadBar.style.display = 'none';
         threeDNote.style.display = 'none';
         imageNote.style.display = 'none';
+        fdiNote.style.display = 'none';
         clear3D();
 
         const lower = selectedFile.name.toLowerCase();
@@ -677,6 +687,7 @@ def index_page():
 
       threeDNote.style.display = 'none';
       imageNote.style.display = 'none';
+      fdiNote.style.display = data.tooth_numbering ? 'block' : 'none';
 
       if (data.modality === 'CBCT' && data.three_d_available && data.mesh_glb_url) {
         cbct3dSection.style.display = 'block';
