@@ -1,0 +1,151 @@
+{
+  "scope": "model forward pass only; excludes decode, gate, drawing and PNG writes",
+  "n_images": 10,
+  "repeats_per_image": 3,
+  "threads": 10,
+  "mean_ms": 5798.9,
+  "median_ms": 5769.7,
+  "p95_ms": 6485.8,
+  "min_ms": 5274.0,
+  "max_ms": 6727.8,
+  "per_image": [
+    {
+      "image": "val_0.png",
+      "size": [
+        2872,
+        1504
+      ],
+      "ms": [
+        6368.7,
+        5813.9,
+        5774.4
+      ],
+      "mean_ms": 5985.7
+    },
+    {
+      "image": "val_1.png",
+      "size": [
+        1976,
+        976
+      ],
+      "ms": [
+        6159.2,
+        6485.8,
+        5886.3
+      ],
+      "mean_ms": 6177.1
+    },
+    {
+      "image": "val_10.png",
+      "size": [
+        2874,
+        1316
+      ],
+      "ms": [
+        5447.7,
+        5598.1,
+        5625.4
+      ],
+      "mean_ms": 5557.1
+    },
+    {
+      "image": "val_11.png",
+      "size": [
+        2884,
+        1504
+      ],
+      "ms": [
+        5778.4,
+        5882.9,
+        5820.3
+      ],
+      "mean_ms": 5827.2
+    },
+    {
+      "image": "val_12.png",
+      "size": [
+        2794,
+        1316
+      ],
+      "ms": [
+        6369.4,
+        5683.8,
+        5526.6
+      ],
+      "mean_ms": 5859.9
+    },
+    {
+      "image": "val_13.png",
+      "size": [
+        2967,
+        1316
+      ],
+      "ms": [
+        5961.1,
+        5765.0,
+        5704.0
+      ],
+      "mean_ms": 5810.0
+    },
+    {
+      "image": "val_14.png",
+      "size": [
+        2728,
+        1316
+      ],
+      "ms": [
+        5803.3,
+        5626.6,
+        6727.8
+      ],
+      "mean_ms": 6052.6
+    },
+    {
+      "image": "val_15.png",
+      "size": [
+        2892,
+        1316
+      ],
+      "ms": [
+        5395.6,
+        5302.4,
+        5274.0
+      ],
+      "mean_ms": 5324.0
+    },
+    {
+      "image": "val_16.png",
+      "size": [
+        2870,
+        1316
+      ],
+      "ms": [
+        5324.3,
+        5296.0,
+        5465.8
+      ],
+      "mean_ms": 5362.0
+    },
+    {
+      "image": "val_17.png",
+      "size": [
+        3076,
+        1536
+      ],
+      "ms": [
+        6105.2,
+        6378.4,
+        5615.7
+      ],
+      "mean_ms": 6033.1
+    }
+  ],
+  "environment": {
+    "platform": "Windows-10-10.0.26200-SP0",
+    "processor": "Intel64 Family 6 Model 154 Stepping 4, GenuineIntel",
+    "python": "3.11.15",
+    "torch": "2.14.1+cpu",
+    "weights": "checkpoints\\best_model.pth",
+    "weights_sha256": "e0b49b12f48fc71ec1f583db08f107650659571e7c2b9cbd454dbfed13b46a1f"
+  }
+}

@@ -1,111 +1,48 @@
-# Viscan: Automated Dental Finding Detection in Panoramic X-rays (OPG)
+# Viscan: Dental Finding Detection in Panoramic X-rays
 
-Technical report for the AI Engineer (Round 2) take-home assessment. Main 2D track, plus a bonus 3D CBCT track.
+Technical report for the AI Engineer (Round 2) take-home assessment. 2D OPG track, plus a bonus 3D CBCT track.
 
-**Candidate:** Surendra
+**Candidate:** Surendra · **Date:** 27 October 2026 · **Code:** `main` at tag `submission` · **Experiments:** executed at `1ac1080` · **Weights:** `best_model.pth`, 173,466,789 bytes, SHA-256 `e0b49b12f48fc71ec1f583db08f107650659571e7c2b9cbd454dbfed13b46a1f` · **Demo:** [huggingface.co/spaces/surendra08/viscan-opg](https://huggingface.co/spaces/surendra08/viscan-opg) · **Video:** pending
 
-| Field | Value |
-|---|---|
-| Report version | 1.0 |
-| Date | 27 October 2026 |
-| Code commit | `31c424cea648ffbeb459fc275eaeca23ea8c6277` (documentation was edited after this commit) |
-| Weights | `best_model.pth`, 173,466,789 bytes, SHA-256 `e0b49b12f48fc71ec1f583db08f107650659571e7c2b9cbd454dbfed13b46a1f` |
-| Live demo | [huggingface.co/spaces/surendra08/viscan-opg](https://huggingface.co/spaces/surendra08/viscan-opg) |
-| Weights download | [huggingface.co/surendra08/viscan-opg-weights](https://huggingface.co/surendra08/viscan-opg-weights) |
-| Demo video (5–8 min) | Pending — to be recorded against this build |
-
-> **Clinical disclaimer:** AI-assisted findings for dentist review. Not a diagnosis. This build is not clinically ready and has not been validated on any clinical data.
-
----
+> **Clinical disclaimer:** AI-assisted findings for dentist review. Not a diagnosis. This build is not clinically ready and has not been validated on clinical data.
 
 ## 1. Summary
 
-I built a service that takes a panoramic dental X-ray, draws boxes around four findings (impacted tooth, caries, periapical lesion, deep caries), and returns an annotated image plus a JSON report. The same endpoint also accepts 3D CBCT scans (§8).
+Viscan takes a panoramic dental X-ray and returns boxes for four findings — impacted tooth, caries, periapical lesion and deep caries — plus an annotated image and JSON. The same endpoint accepts a 3D CBCT scan (§8). The detector is Faster R-CNN ResNet-50 FPN V2 (COCO_V1), 43.3 M parameters, fine-tuned for 12 epochs on DENTEX 2023.
 
-The detector is Faster R-CNN (ResNet-50 backbone, 43.3 M parameters), fine-tuned for 12 epochs on DENTEX 2023. On 50 held-out X-rays it scores **mAP@50 0.496** and **mAP@50:95 0.329**. At the confidence setting I chose (0.70), average F1 across the four classes is 0.402. On a CPU with 2 threads it takes **4.6 seconds** per X-ray.
+On 50 held-out images (182 boxes) it scores **mAP@50 0.496** and **mAP@50:95 0.329**; macro-F1 across the four classes is **0.402** at the shipped threshold of 0.70. Impacted teeth are usable (F1 0.81); the other three classes are weak (0.37, 0.26, 0.17), so treat the output as a highlighter, not a filter. A model forward pass takes **9.3 s** on two CPU threads or 5.8 s with all ten cores; a full request on this laptop is 8.3–9.4 s because it also decodes, gates, draws and writes two PNGs.
 
-The best score I measured is the same model run twice, once on the image and once on its mirror: mAP@50 rises from 0.496 to 0.528. I still ship the single pass, because the mirror run doubles the compute and its F1 at the chosen setting is slightly lower (0.399 against 0.402). §5.5 lists every configuration I ran — the baseline plus nine alternatives, one of which improved detection.
-
-> **In plain words**
-> - The model draws boxes around four kinds of dental finding on a panoramic X-ray.
-> - On 50 X-rays it had never seen, it scores about 50 out of 100 on the standard test (mAP@50), where 100 would mean every marked finding found with no false alarms.
-> - It is good at impacted teeth, weak at deep decay, and weaker still at infections at the root tip.
-> - It takes about 4.6 seconds per X-ray on a 2-core CPU, so the demo handles one image at a time.
-> - This is research code. It is not a diagnosis, and a dentist must check every box.
-
-**Terms used in this report**
-
-| Term | Meaning |
-|---|---|
-| Precision | Of the boxes the model drew, the share that were correct |
-| Recall | Of the findings a dentist marked, the share the model found |
-| F1 | One score combining precision and recall; 1.0 is perfect |
-| IoU | How much a predicted box overlaps the true box; 0.50 means about half |
-| mAP | Average precision across classes. `@50` needs 50% overlap; `@50:95` averages stricter overlaps from 50% to 95% and is my main score |
-| TTA | Test-time augmentation: run the model on the image and its mirror, then merge |
-| NMS / WBF | Two ways to merge overlapping boxes: keep the best and drop the rest (NMS), or average them (weighted box fusion, WBF) |
-
----
+The best measured change is horizontal-flip TTA: mAP@50 rises from 0.496 to 0.528 for twice the compute, while F1 at its own threshold is 0.399 against 0.402. I ship the single pass. §6 lists every configuration I ran.
 
 ## 2. Intended use and safety
 
-This is a research prototype for a dentist-facing review workflow. It highlights candidate regions and returns boxes with class labels and confidence scores. It does not diagnose. The confidence score ranks findings; it is not the probability of disease. `tooth_fdi` (tooth number) is always `null` rather than guessed, and patient tags are stripped from DICOM files. The 3D track reports a straight-line gap in millimetres between two segmented surfaces, not a traced nerve or a risk score. If the 3D model files are missing, the service refuses raw 3D uploads with HTTP 503 and never substitutes demo data.
-
-**Licensing restriction:** my fine-tuned weights inherit the non-commercial licence of DENTEX and cannot be used commercially as they are (§7).
-
----
+A research prototype for a dentist-facing review workflow: it highlights candidate regions and does not diagnose, and the confidence score ranks findings rather than giving the probability of disease. `tooth_fdi` is always `null` rather than guessed, and patient tags are stripped from DICOM. The 3D track reports a straight-line gap in millimetres between two segmented surfaces, not a traced nerve or a risk score; without 3D weights, raw uploads get HTTP 503 and demo data is never substituted. The fine-tuned 2D weights are non-commercial (DENTEX is CC BY-NC-SA 4.0, §9).
 
 ## 3. Data card
 
-**Dataset choice.** DENTEX (MICCAI 2023, CC BY-NC-SA 4.0) is the only public dataset I found with expert boxes for all four required findings, so it is the only one I used. I excluded two alternatives: Zhou et al. (2024) merges all caries into one label and has no impaction label, and the Tufts database is available only under restricted institutional terms. Source: Hugging Face `ibrahimhamamci/DENTEX`, pinned to revision `7b27ccc8e342dcb774f69adc6ca5e6c09fefce93`.
+**Dataset.** DENTEX (MICCAI 2023, CC BY-NC-SA 4.0) is the only public dataset with expert boxes for all four findings, so it is the only one I used; Zhou et al. (2024) merges caries classes and has no impaction label, and Tufts is restricted. Source: Hugging Face `ibrahimhamamci/DENTEX`, revision `7b27ccc8e342dcb774f69adc6ca5e6c09fefce93`.
 
-**Size.** DENTEX has 705 labelled training images, 50 official validation images and 250 challenge-test images with no public labels. I did not use the 250. My working set is 755 labelled images with 3,711 boxes, split with seed 42.
+**Split.** DENTEX has 705 labelled training images and 50 official validation images with labels; I did not use the 250 challenge-test images. My working set is 755 labelled images and 3,711 boxes, split with seed 42. The test set is the official 50-image validation set.
 
-| Split | Images | Boxes | Role |
-|---|---:|---:|---|
-| Train | 635 | 3,190 | Teaching the model |
-| Validation | 70 | 339 | Choosing the best epoch and the confidence setting |
-| Test | 50 | 182 | Final scores only; untouched until model and threshold were frozen |
+| Split | Images | Boxes | Impacted | Caries | Periapical | Deep caries | Role |
+|---|---:|---:|---:|---:|---:|---:|---|
+| Train | 635 | 3,190 | 545 | 2,004 | 144 | 497 | Teaching the model |
+| Validation | 70 | 339 | 59 | 185 | 14 | 81 | Epoch and threshold selection |
+| Test | 50 | 182 | 40 | 101 | 9 | 32 | Final scores only |
 
-| Class | Train | Val | Test |
-|---|---:|---:|---:|
-| `impacted_tooth` | 545 | 59 | 40 |
-| `caries` | 2,004 | 185 | 101 |
-| `periapical_lesion` | 144 | 14 | 9 |
-| `deep_caries` | 497 | 81 | 32 |
+The test set is small — 9 periapical and 32 deep-caries boxes — so a handful of images can move a per-class score.
 
-Caries outnumbers periapical lesions about 14 to 1 in training, and the rarest class has only 9 test boxes. Every detector and setting in this report was scored on exactly this split; §5.5 is the full comparison.
+**Leakage.** The 70 validation images were drawn from the 705-image training pool with a seeded shuffle. I checked in code that no filename appears in two splits. DENTEX has no patient IDs, so I cannot rule out one patient appearing in two splits.
 
-**Avoiding leakage.** The 70 validation images were drawn from the 705-image archive with a seeded shuffle. The test set is the official DENTEX validation set. I checked in code that no filename appears in two splits. DENTEX has no patient IDs, so I cannot rule out one patient appearing in two splits.
+**Preparation.** Boxes `[x, y, width, height]` are clipped to the image and converted to `[x_min, y_min, x_max, y_max]`; no classes were merged. Images are resized to fit 800 × 1333, about 0.47× on average. DICOM files apply the modality LUT then the VOI LUT; MONOCHROME1 images are flipped. An input gate rejects blank, corrupt, colour, portrait and screenshot-like files before inference.
 
-**Preparation.** Boxes `[x, y, width, height]` are clipped to the image and converted to `[x_min, y_min, x_max, y_max]`. No classes were merged. Images are shrunk to fit 800 × 1333, about 0.47× on average, which matters for the tiling experiment in §5.5. DICOM files go through the standard contrast settings (modality LUT, then VOI LUT), MONOCHROME1 images are flipped, and an input check rejects blank, corrupt, multi-frame, colour, portrait or screenshot-like files.
+**Class imbalance.** I did not use class weights or oversampling. The only imbalance-aware choices are per-class reporting and a single global threshold chosen on validation macro-F1; per-class thresholds and a rebalanced loss were not run. This is a limitation, not a solution (§9). Caries outnumbers periapical lesions about 14 to 1 in training. The raw data is not in the repository; `prepare_data.py` downloads and prepares it.
 
-**Class imbalance.** I applied no class weights or oversampling in the main run. That is one of the main limitations (§6.2).
+## 4. Model and training
 
-The raw data is not in the repository; `prepare_data.py` downloads and prepares it.
+I compared two options and trained the first: Faster R-CNN R50-FPN V2 (43.3 M parameters, BSD-3-Clause code and COCO starting weights) against Ultralytics YOLO11n (about 2.6 M, AGPL-3.0, not trained). DENTEX's reference run is a Faster R-CNN, so this is a like-for-like check, and the permissive licence avoids YOLO's AGPL obligation; the cost is a larger, slower model. There is no measured architecture comparison.
 
----
-
-## 4. Model choice and training
-
-I compared two options and trained Faster R-CNN. I also trained RetinaNet for comparison (§5.5).
-
-| | **Faster R-CNN R50-FPN V2** (used) | Ultralytics YOLO11n (not trained) |
-|---|---|---|
-| Type | Two-stage detector | Single-stage detector |
-| Size | 43.3 M parameters | about 2.6 M |
-| Code and starting weights | BSD-3-Clause | AGPL-3.0 |
-| Fine-tuned model | CC BY-NC-SA 4.0 (from the data) | AGPL-3.0 plus CC BY-NC-SA 4.0 |
-
-I chose Faster R-CNN for two reasons. The DENTEX reference run is a Faster R-CNN, so I have a like-for-like check, and its licence is permissive, whereas AGPL would force a YOLO-based service to be open-sourced. The cost is a larger, slower model.
-
-**Training setup** (`configs/baseline.yaml`): fine-tuned from COCO-pretrained weights, seed 42 everywhere with deterministic mode, SGD (learning rate 0.005, momentum 0.9, weight decay 0.0005), cosine schedule over 12 epochs, batch size 2, mixed precision on a Tesla T4. The best checkpoint is **epoch 8** (validation mAP@50 0.570, mAP@50:95 0.360). The model keeps low-scoring boxes internally so the precision-recall curves are complete, and the confidence setting is applied afterwards.
-
-![Figure 1: training and validation curves](assets/eval/training_curves.png)
-
-*Figure 1: validation mAP@50 peaks at epoch 8 while training loss keeps falling, so I kept epoch 8 and not the last epoch.*
-
-**Reproduce:**
+**Training setup** (`configs/baseline.yaml`): fine-tuned from COCO-pretrained weights; seed 42 with deterministic mode; SGD (learning rate 0.005, momentum 0.9, weight decay 0.0005); cosine schedule over 12 epochs; batch size 2; mixed precision on a Tesla T4; input 800 × 1333. The best checkpoint is epoch 8 (validation mAP@50 0.570, mAP@50:95 0.360). Low-scoring boxes are kept internally so the precision-recall curves are complete; the 0.70 floor is applied afterwards.
 
 ```bash
 python prepare_data.py data/dentex
@@ -113,26 +50,9 @@ python train.py --config configs/baseline.yaml
 python evaluate.py --weights checkpoints/best_model.pth --data_dir data/dentex
 ```
 
----
-
 ## 5. Results (50 held-out images, 182 boxes)
 
-### 5.1 Overall scores
-
-| Metric | Score |
-|---|---:|
-| mAP@50 | 0.496 |
-| **mAP@50:95 (main)** | **0.329** |
-| mAP@75 | 0.383 |
-| AR@100 (recall) | 0.683 |
-
-The drop from 0.496 at 50% overlap to 0.383 at 75% overlap suggests boxes are usually in the right place but not drawn tightly.
-
-For context, the DENTEX 2023 report lists 36.5–37.6 AP for its top five entries and 33.2 AP for its Faster R-CNN reference, on a hidden 250-image set. My 0.329 is on a different 50-image public set, so the two are not comparable.
-
-### 5.2 Per class, and the confidence setting
-
-I swept confidence from 0.10 to 0.90 on the 70 validation images and picked **0.70**, where the average F1 across classes peaked (0.556). I applied it once to the test set. Test average F1 is 0.402, noticeably lower than validation, partly because 50 images is small and partly because one global setting suits the rare classes badly.
+Overall: mAP@50 0.496, mAP@50:95 0.329, mAP@75 0.383, AR@100 0.683, macro-F1 0.402 at 0.70. Boxes are usually in the right place but not drawn tightly (AP50 0.496 vs AP75 0.383).
 
 | Class | Test boxes | AP@50 | AP@50:95 | Precision | Recall | F1 |
 |---|---:|---:|---:|---:|---:|---:|
@@ -141,196 +61,72 @@ I swept confidence from 0.10 to 0.90 on the 70 validation images and picked **0.
 | `deep_caries` | 32 | 0.457 | 0.302 | 42.9% | 18.8% | 0.26 |
 | `periapical_lesion` | 9 | 0.336 | 0.230 | 33.3% | 11.1% | 0.17 |
 
-Impacted teeth are usable. The other three are weak, and that gap (0.81 down to 0.17) is the clearest result in this report. Average F1 is the plain mean of the four values: (0.814 + 0.365 + 0.261 + 0.167) / 4 = 0.402.
+The clearest result is the 0.81-to-0.17 F1 range: impacted teeth are usable, the other three classes are not. The mean is (0.814 + 0.365 + 0.261 + 0.167) / 4 = 0.402. Matching is class-aware at IoU ≥ 0.50, so a box in the right place with the wrong class counts against both classes.
 
-Those four columns use the class-aware matching rule in [`evaluate.py`](evaluate.py), where a box matched at IoU ≥ 0.50 but given the wrong class counts against both classes. Concretely: caries precision of 27.7% is 54 correct boxes out of 195 drawn, so 141 false positives — 124 on background, 14 deep-caries boxes and 3 periapical boxes. Caries recall of 53.5% is 54 of 101, so 47 misses — 45 never found, 1 labelled deep caries and 1 labelled impacted tooth. Every class decomposes the same way.
+Of 182 true boxes, 96 were found, 66 missed and 20 swapped between classes; there were 142 background false alarms, 124 of them caries, and 14 of the 32 deep-caries boxes were called ordinary caries.
 
-### 5.3 Confusion matrix
+**Operating point.** I swept confidence 0.10–0.90 on the 70 validation images and picked 0.70, where validation macro-F1 peaked at 0.556, then read test once. Test F1 is 0.402: 50 images is small and one global setting suits rare classes badly.
 
-Rows are the truth, columns are the prediction.
+**CPU speed.** A model forward pass takes 9.3 s mean (median 8.6 s, range 7.3–15.6 s) on two threads over 10 of the 50 held-out images, three timed runs each after warm-up (`scripts/benchmark_cpu.py`); the same images average 5.8 s with all ten cores of this laptop. A full request on this laptop takes 8.3–9.4 s over the five bundled samples because it also decodes, gates, draws and writes two PNGs. The earlier 4.6 s figure was one image, model-only, on all cores; it was neither a two-core nor a full-request number. The earlier evaluation measured 2.9 GB peak process memory. That is fine for a single-user demo and too slow for a clinic queue; production would load the model once, serve one request at a time, report readiness on `/health` and fail closed with 503 rather than invent a result.
 
-| Truth \ Predicted | Nothing | Impacted | Caries | Periapical | Deep caries |
-|---|---:|---:|---:|---:|---:|
-| Nothing there (false alarm) | — | 10 | 124 | 2 | 6 |
-| `impacted_tooth` | 5 | **35** | 0 | 0 | 0 |
-| `caries` | 45 | 1 | **54** | 0 | 1 |
-| `periapical_lesion` | 4 | 0 | 3 | **1** | 1 |
-| `deep_caries` | 12 | 0 | 14 | 0 | **6** |
+## 6. The measured comparison
 
-The totals reconcile: 182 true boxes = 96 found + 66 missed entirely + 20 swapped between classes, and 142 false alarms land where nothing was marked.
+P0–P7 come from one executed Kaggle T4 session at repo commit `1ac1080`; the executed notebook is `kaggle_beat_benchmark_notebook.ipynb` (17/17 code cells with outputs). It first reproduced the shipped baseline (AP 0.3293, AP50 0.4961, AP75 0.3830, AR@100 0.6834, F1 0.4016) with drift ≤ 0.0004. Thresholds and pipelines were selected on validation; the 50-image test set was read once per pipeline.
 
-Two patterns explain most of the errors. First, 14 of the 32 deep-caries boxes are found in the right place but called ordinary caries. The line between the two is subjective and depends on how close the decay runs to the nerve, which is hard to see on a flat X-ray. Second, about nine in ten false alarms (124 of 142) are caries, likely on low-contrast gaps between teeth and around fillings, though this run does not check that anatomically.
+| Pipeline | Test AP | Test AP50 | Δ AP50 vs P0 | Test F1 at its τ |
+|---|---:|---:|---:|---:|
+| **P0 baseline (shipped)** | 0.3293 | 0.4961 | — | 0.4016 at 0.70 |
+| P1 same weights + hflip TTA | 0.3446 | 0.5281 | +0.0320 | 0.3988 at 0.80 |
+| P2 full view (hflip TTA) + native-scale tiles | 0.2189 | 0.3557 | −0.1404 | 0.2896 at 0.35 |
+| P3 P2 + RetinaNet, WBF | 0.1790 | 0.3015 | −0.1946 | 0.2661 at 0.30 |
+| P4 P2 + crop checker, re-score | 0.2211 | 0.3589 | −0.1372 | 0.3543 at 0.40 |
+| P5 P3 + crop checker, re-score | 0.1936 | 0.3168 | −0.1793 | 0.3172 at 0.40 |
+| P6 P2 + crop checker, re-label | 0.1700 | 0.2715 | −0.2246 | 0.3184 at 0.25 |
+| P7 P3 + crop checker, re-label | 0.1437 | 0.2356 | −0.2605 | 0.2320 at 0.30 |
 
-![Figure 2: test-set confusion matrix](assets/eval/confusion_matrix.png)
+Only P1 beat the baseline on detection score, and not at the setting I would run: +0.032 AP50 and +0.015 AP for twice the forward passes, with F1 at its own validation-selected threshold slightly lower. Its cost was measured only on GPU, so the extra CPU time is unmeasured. I ship P0.
 
-*Figure 2: the same matrix as a heatmap; the bright off-diagonal cell is the deep-to-shallow caries confusion.*
+The rest lost 0.137–0.261 AP50. P2 tiles an 800 px crop at about twice the object size the model learned and overflowed the 300-box cap. P3's RetinaNet was undertrained, not shown to be worse: validation mAP@50 was 0.0783 at epoch 12/12 and still rising. The crop checker helped slightly as a re-scorer (+0.003 AP50 over P2) and hurt as a re-labeller (0.272); its 92.1% is training accuracy on its own crop bank, not held-out.
 
-### 5.4 CPU speed
+A 960×1600 run, from the executed training notebook `kaggle_notebook.ipynb` rather than this ladder, drew tighter boxes (AP75 0.410 vs 0.383) and found impacted teeth better (AP50 0.915 vs 0.833) but lost overall (AP50 0.493, AP 0.313) and on deep caries (0.365); its batch size also changed, so resolution is not isolated. Per-class thresholds were not run.
 
-End to end (file read, decoding, model, box merging) on a full-size scan (2892 × 1316), with 5 warm-up and 30 timed runs, 2 threads on an Intel Xeon at 2.0 GHz: **mean 4.6 s** (median 4.7 s, 95th percentile 4.9 s, range 4.2–5.0 s), peak memory 2.9 GB. That is fine for a single-user demo and too slow for a clinic queue. GPU speed for this model was not measured.
+## 7. Failure cases
 
-### 5.5 Comparison of all models and settings
-
-Everything below uses the same 635 / 70 / 50 split, seed and evaluator, from one Kaggle T4 session of [`kaggle_beat_benchmark_notebook.ipynb`](kaggle_beat_benchmark_notebook.ipynb). The run first reproduced the shipped baseline (AP 0.3293, AP50 0.4961, AP75 0.3830, AR@100 0.6834, F1 0.4016), so the comparison starts from a number that matches. Each setting's confidence threshold and each pipeline were chosen on validation, and the test column was read once.
-
-| Setting | What changed | Val AP | Test AP | Test AP50 | Test AP75 | Test AR@100 | Δ AP50 |
-|---|---|---:|---:|---:|---:|---:|---:|
-| **Baseline (shipped)** | 800 × 1333, one pass | 0.360 | 0.329 | 0.496 | 0.383 | 0.683 | — |
-| Higher resolution | 960 × 1600, batch size 1 | 0.354¹ | 0.313 | 0.493 | 0.410 | 0.681 | −0.003 |
-| Mirror averaging (TTA) | Same weights, image plus mirror | 0.369 | 0.345 | 0.528 | 0.398 | 0.685 | +0.032 |
-| Native-scale tiles | 800 × 800 crops, merged with full view | 0.196 | 0.219 | 0.356 | 0.252 | 0.664 | −0.140 |
-| RetinaNet | One-stage model, same recipe | 0.078² | 0.053 | 0.095 | 0.056 | 0.514 | −0.401 |
-| Tiles + RetinaNet | Weighted box fusion | 0.145 | 0.179 | 0.302 | 0.197 | 0.646 | −0.194 |
-| Tiles + crop checker (re-score) | ConvNeXt-Tiny re-scores each box | 0.224 | 0.221 | 0.359 | 0.247 | 0.656 | −0.137 |
-| Tiles + RetinaNet + checker (re-score) | Both | 0.186 | 0.194 | 0.317 | 0.208 | 0.661 | −0.179 |
-| Tiles + crop checker (re-label) | Checker re-labels each box | 0.138 | 0.170 | 0.272 | 0.190 | 0.557 | −0.224 |
-| Tiles + RetinaNet + checker (re-label) | Both | 0.080 | 0.144 | 0.236 | 0.166 | 0.608 | −0.260 |
-
-¹ Validation AP for that run at its selected epoch (5 of 12). ² This cell is the training loop's validation mAP@50 (0.0783 at epoch 12), not mAP@50:95, so it is not on the same scale as the others; it is here only to show how far that member had converged.
-
-**What this shows.** One of nine alternatives improved detection (mirror averaging, +0.032 AP50), none improved the setting I would actually run, and the rest lost between 0.003 and 0.401 AP50.
-
-- **Why I still ship the baseline.** Mirror averaging doubles the forward passes, and at its own best threshold (0.80) its F1 is 0.399 against 0.402. The higher-resolution run drew tighter boxes (AP75 0.383 → 0.410) and found impacted teeth better (AP50 0.833 → 0.915), but lost on overall AP and on deep caries (0.457 → 0.365). Its batch size also changed, so resolution is not isolated.
-- **Why tiling failed (my best explanation, not proven).** An 800 px tile is shown to the model at about twice the object size it learned (0.474× in training), so every tile is an unusual view, and the tile pass produced about 373 candidates per image, more than the 300-box cap. AP50 fell to 0.356.
-- **RetinaNet was undertrained, not shown to be worse.** Its validation score was still rising at epoch 12, so the architecture is untested rather than rejected. Fusing it with the tiles cost 0.054 AP50 against the tiles alone, which says nothing about fusion as an idea.
-- **The crop checker** helped slightly when re-scoring (0.219 → 0.221) and hurt when re-labelling: it changed 1,850 of 3,303 test boxes, dropped 277 as background, and AP50 fell to 0.272. Its reported 92.1% accuracy is on its own training crops ([`cascade_refine.py:276`](cascade_refine.py#L276)), not held-out data.
-- **Stacking compounds the error.** The two three-stage fusions landed at 0.194 and 0.144 AP50, below the tiled detector (0.356) and below the checker alone (0.359 and 0.272).
-
-At each pipeline's own validation-selected threshold, the setting a user would actually run:
-
-| Pipeline | Threshold from validation | Test F1 | Test AP50 |
-|---|---:|---:|---:|
-| Baseline (shipped) | 0.70 | 0.4016 | 0.496 |
-| Mirror averaging (TTA) | 0.80 | 0.3988 | 0.528 |
-| Native-scale tiles | 0.35 | 0.290 | 0.356 |
-| Tiles + RetinaNet | 0.30 | 0.266 | 0.302 |
-| Tiles + crop checker (re-score) | 0.40 | 0.354 | 0.359 |
-| Tiles + crop checker (re-label) | 0.25 | 0.318 | 0.272 |
-
-None beats the baseline's 0.402 at its own operating point; mirror averaging comes closest while still gaining 0.032 AP50.
-
-Per-class thresholds were not run — one global setting per pipeline. The two three-stage fusions were scored on detection AP only. A side-by-side panel of ground truth, baseline and the best alternative would need prediction dumps re-rendered from that Kaggle session; the rendered comparisons that exist here are Figures 3 and 4.
-
-### 5.6 The models behind these numbers
-
-Four models were trained for this report. Only the first one is deployed.
-
-| Model | Role | How it was trained | Best test score |
-|---|---|---|---|
-| Faster R-CNN, ResNet-50 FPN V2, 800 × 1333 | The shipped detector | 43.3 M parameters, 12 epochs on 635 images, best epoch 8 | AP50 0.496, AP 0.329 |
-| Faster R-CNN, ResNet-50 FPN V2, 960 × 1600 | Resolution check | Same data and seed, batch size 1, best epoch 5 | AP50 0.493, AP 0.313 |
-| RetinaNet, ResNet-50 FPN V2 | Architecture check | Same recipe and 12 epochs; scored with mirror averaging | AP50 0.095, AP 0.053 |
-| ConvNeXt-Tiny crop checker | Re-scores or re-labels boxes proposed by the tiled detector | 6,380 crops: 3,190 annotated boxes plus 3,190 background crops | 92.1% accuracy on its own training crops; effect on AP in §5.5 |
-
-Two of these are detectors doing the same job, which is the only clean architecture comparison I have. The two-stage Faster R-CNN was better by a wide margin: 0.496 AP50 against 0.095. That gap is larger than the architecture alone explains, because RetinaNet was still improving when its 12 epochs ran out, so the comparison reflects the schedule as much as the design. On this data, with the training each of them received, Faster R-CNN is the better model I have evidence for.
-
-The crop checker is not a detector. It looks at a box someone else proposed and either re-scores it or re-labels it; as a re-scorer on the tiled detector it moved slice AP from 0.219 to 0.221, and as a re-labeller it dropped AP50 to 0.272. Its 92.1% is training accuracy on the crop bank, not held-out accuracy.
-
-Everything else in §5.5 — mirroring, tiling, weighted box fusion — is a change in how the shipped model is run, not a new model.
-
----
-
-## 6. Failures and limitations
-
-### 6.1 Five failure cases
-
-At the 0.70 setting the model made 142 false alarms (in 44 of 50 images), missed 66 boxes entirely (in 33 images) and swapped 20 classes. Five cases were exported, at most one per image, in Cell 9 of [`kaggle_notebook.ipynb`](kaggle_notebook.ipynb). The explanations are hypotheses, since I ran no experiment to test causes.
+At 0.70 the model made 142 false alarms in 44 of 50 images, missed 66 boxes in 33 images and swapped 20 classes. The five cases were exported from Cell 9 of `kaggle_notebook.ipynb`, at most one per image; the explanations are hypotheses, untested.
 
 | # | Image | What happened | Likely reason |
 |---|---|---|---|
-| 1 | `val_4` | False alarm: impacted tooth, score 0.99, IoU 0.00 | Confident about back-of-jaw anatomy the annotators did not mark. If DENTEX labels only some impactions, unlabelled third molars explain it. |
-| 2 | `val_38` | Missed a periapical lesion | Rare class (144 training boxes, AP50 0.336), and only 1 of 9 was found at this setting, so the miss is typical rather than odd. |
-| 3 | `val_3` | Deep caries called caries, score 0.97 | Box is right, severity is wrong. 14 of 20 swaps are this pair, which points at the deep/shallow line and not at localisation. |
-| 4 | `val_33` | Missed a caries | Caries recall is 53.5%, and the scan is shrunk 0.47×, so a small gap-between-teeth cavity is the expected casualty. |
-| 5 | `val_13` | False alarm: impacted tooth, score 0.99, IoU 0.00 | Same error as case 1, same confidence. The repeat suggests this is the model's most confident mistake, not a one-off. |
+| 1 | `val_4` | False alarm: impacted tooth, score 0.99, IoU 0.00 | Confident about back-of-jaw anatomy the annotators did not mark; unlabelled third molars are plausible. |
+| 2 | `val_38` | Missed a periapical lesion | Rare class (144 training boxes); only 1 of 9 was found at this setting. |
+| 3 | `val_3` | Deep caries called caries, score 0.97 | Box is right, severity is wrong; 14 of 20 swaps are this pair. |
+| 4 | `val_33` | Missed a caries | Caries recall is 53.5% and the scan is shrunk 0.47×, so a small gap-between-teeth cavity is the expected casualty. |
+| 5 | `val_13` | False alarm: impacted tooth, score 0.99, IoU 0.00 | Same error as case 1; the repeat suggests it is the model's most confident mistake, not a one-off. |
 
-The exported cases are dominated by the model's most confident error, while its most frequent error is only visible in the totals.
-
-| Error | Count | Breakdown |
-|---|---:|---|
-| False alarms on background | 142 in 44 images | caries 124, impacted 10, deep caries 6, periapical 2 |
-| Missed entirely | 66 in 33 images | caries 45, deep caries 12, impacted 5, periapical 4 |
-| Swapped between classes | 20 | deep→caries 14, periapical→caries 3, periapical→deep 1, caries→deep 1, caries→impacted 1 |
-
-Nine of every ten false alarms are caries, and seven of every ten swaps collapse deep caries into ordinary caries.
-
-![Figure 3: the five failure cases](assets/eval/failure_cases.png)
-
-*Figure 3: ground truth in green, predictions in red. Panels 1 and 5 are both confident impacted-tooth false alarms; panel 3 is the deep-to-shallow swap.*
-
-![Figure 4: sample test detections](assets/eval/sample_detections.png)
-
-*Figure 4: a typical test scan. The extra red boxes are the caries false-alarm pattern counted above.*
-
-### 6.2 Limitations
-
-§5.5 holds the measured comparisons; this table records what they mean for use.
-
-| Limitation | What I measured | Consequence |
-|---|---|---|
-| Rare classes | Recall 11.1% (periapical) and 18.8% (deep caries) at 0.70 | Close to unusable at the default setting; lowering it finds more, with more false alarms |
-| Deep vs shallow labels | 14 of 32 deep boxes mislabelled | Severity cannot be trusted even when the box is right |
-| Caries false alarms | 124 of 142; precision 27.7% | The model is a highlighter, not a filter; expect a heavy review load |
-| No class balancing, one global threshold | Not done in any run | Rare classes are penalised twice |
-| 2D projection overlap | Not measured | Overlapping anatomy is confounded with lesions and cannot be separated in 2D |
-| No tooth numbers | `tooth_fdi` is always `null` | Findings cannot be keyed to a specific tooth |
-| One dataset | DENTEX only | Performance on other clinics' scanners is unknown |
-
-The first four need new training. The rest need new data, a new model, or a product decision — none of them is fixed by tuning the demo.
-
----
-
-## 7. Licensing
-
-| Component | Licence | Commercial use |
-|---|---|---|
-| My code and API, and torchvision Faster R-CNN with COCO weights | BSD-3-Clause | Allowed |
-| DENTEX data and my fine-tuned `best_model.pth` | CC BY-NC-SA 4.0 | **Not allowed as it stands.** Needs retraining on commercially licensed data. |
-| Runtime libraries (PyTorch, FastAPI, pydicom, NumPy, SciPy, scikit-image, trimesh, nibabel, nnU-Net v2, etc.) | MIT / BSD / Apache-2.0 / HPND | Allowed, with attribution |
-| DentalSegmentator weights (3D) and 3D Slicer demo scans | CC BY 4.0 / Slicer BSD-style | Allowed; confirm data reuse with the Slicer project |
-| Ultralytics YOLO (not used) | AGPL-3.0 | Only if the service is open-sourced or an enterprise licence is bought |
-
-The code could ship in a commercial product. The trained 2D weights could not. The restriction comes entirely from DENTEX.
-
----
+The five exported cases are the model's most confident errors; its most frequent error, caries false alarms, shows only in the totals.
 
 ## 8. Bonus: 3D CBCT
 
-The same `/analyze` endpoint accepts `.nii`, `.nii.gz` and ZIP archives of a 3D scan. I use **DentalSegmentator** (Dot et al., 2024) **as-is, without any training of mine**, to segment five structures: upper jaw, mandible, upper teeth, lower teeth and mandibular canal. My work is the loading, patient-tag removal, 60 mm³ island cleanup, distance measurement, 3D mesh export and the browser viewer.
+The same `/analyze` endpoint accepts `.nii`, `.nii.gz` and ZIP archives of a CBCT scan. I use DentalSegmentator (Dot et al., 2024) as-is, without training, to segment five structures: upper jaw, mandible, upper teeth, lower teeth and mandibular canal. My work is loading, patient-tag removal, 60 mm³ island cleanup, distance measurement, mesh export and browser viewer.
 
-The reported finding is the smallest straight-line gap in millimetres between the lower teeth and the nerve canal, per half of the scan. On the Post-surgery demo scan the gaps are 0.71 mm and 1.58 mm; on the Pre-surgery scan, 2.12 mm and 1.50 mm. The two halves are a voxel midpoint split, not yet mapped to the patient's real left and right, and the gap is not a traced nerve path or a surgical risk score. On a Tesla T4 one full run takes 131 s and uses 4.9 GB of GPU memory; the model prediction matches the published reference mask at mean Dice 0.9639 on the Post scan.
+The finding is the smallest straight-line gap between the lower teeth and the nerve canal, per half of the volume: 0.71 mm and 1.58 mm on the Post-surgery demo scan, 2.12 mm and 1.50 mm on Pre. The halves are a voxel midpoint split, not the patient's real left and right, and the gap is not a traced nerve or a risk score. A full Post run on a Tesla T4 takes 131.4 s of inference over 252 tiles, 5.8 s of post-processing and 0.9 s of meshing, peaking at 4,936 MB of GPU memory. The Post labels are the published SlicerDentalSegmentator reference mask, matched at mean Dice 0.964 (canal 0.897); the Pre labels have no reference mask, so no Dice is reported. The two scans are not claimed to be the same patient. Pre-segmented bundles skip the network (about 9.6 s Post and 10.4 s Pre on CPU); the Pre bundle's `run_metrics.json` is not backed by an executed notebook, so I do not report it.
 
-The free Space has no 3D model, so a raw upload there returns HTTP 503 and only the two bundled pre-segmented scans work. The production plan (queued jobs, warm GPU workers, compressed meshes) is a design in [`README.md`](README.md) §7, not a benchmark.
+The free Space has no 3D model, so raw uploads there return HTTP 503 and only the two bundled scans work; demo data is never substituted for a failed inference. The production plan — queued jobs, warm GPU workers, compressed meshes — is in README §7, not a benchmark.
 
-![Figure 5: CBCT multi-planar reconstruction, Post scan](assets/eval/cbct_ortho_preview.png)
+## 9. Licensing, limits and next work
 
-![Figure 5: CBCT multi-planar reconstruction, Pre scan](assets/eval/cbct_ortho_pre_preview.png)
+Code is BSD-3-Clause. DENTEX and the fine-tuned `best_model.pth` are CC BY-NC-SA 4.0, so the weights are non-commercial and would need retraining on cleared data. DentalSegmentator weights are CC BY 4.0; the Slicer demo scans are BSD-style; runtime libraries are MIT, BSD, Apache-2.0 or HPND. YOLO11n (AGPL-3.0) was not used. The code could ship commercially; the trained 2D weights could not.
 
-*Figure 5: axial, coronal, sagittal and coronal MIP panels for the Post (top) and Pre (bottom) demo volumes.*
+The rare classes are the main limit: periapical recall 11.1% and deep-caries recall 18.8% at 0.70, and 14 of 32 deep boxes are called shallow. Caries precision is 27.7%. There is no class balancing and only one global threshold. The model has no tooth numbers, was trained on one dataset, and 2D projection overlap cannot separate anatomy from lesions; the input gate uses hand-written rules, so unusual X-rays can be wrongly rejected.
 
----
+With two more weeks: per-class confidence settings tuned on validation (1–2 days, not measured); class-balanced loss and oversampling for periapical and deep caries (about a week); RetinaNet with a schedule suited to 635 images (2–3 GPU days); ONNX export with INT8 quantisation (3–5 days, target unmeasured); a tooth-number stage to fill `tooth_fdi` (about two weeks). Mirror averaging on a GPU deployment is the cheap extra (+0.032 AP50 for twice the compute), but its CPU cost was never measured.
 
-## 9. What I would do with two more weeks
+## 10. Reproduce and AI disclosure
 
-| Priority | Work | Expected effect | Effort |
-|---|---|---|---|
-| 1 | Per-class confidence settings, tuned on validation, no retraining | Likely recovers rare-class recall at some cost to caries precision; not measured | 1–2 days |
-| 2 | Class-balanced loss and oversampling for periapical and deep caries | The only plausible route to improving 11% and 19% recall; unmeasured | about 1 week |
-| 3 | RetinaNet with a schedule suited to 635 images | Current run is undertrained, so the architecture is untested | 2–3 GPU days |
-| 4 | ONNX export with INT8 quantisation | Target is well under the 4.6 s now; unmeasured | 3–5 days |
-| 5 | Tooth-number (FDI) stage to fill `tooth_fdi` | Turns boxes into per-tooth findings | about 2 weeks |
+```bash
+docker compose up              # or: python app.py
+python scripts/smoke_test.py   # after the server is up
+```
 
-Mirror averaging on a GPU deployment is the cheap extra (+0.032 AP50 for twice the compute); its CPU cost was never measured.
+The first start fetches and SHA-256-verifies the 173 MB checkpoint. The Python path, the smoke test and the 10-image benchmark were run on Windows with Python 3.11; the Docker image was not built on this machine. Training and evaluation commands are in §4. AI tools used are listed in [AI_DISCLOSURE.md](AI_DISCLOSURE.md).
 
----
-
-## 10. References
-
-- Hamamci et al., "DENTEX: An Abnormal Tooth Detection with Dental Enumeration and Diagnosis Benchmark for Panoramic X-rays", MICCAI 2023.
-- Dot et al., "DentalSegmentator", *Journal of Dentistry*, 2024. Zenodo 10.5281/zenodo.10829675.
-- Isensee et al., "nnU-Net", *Nature Methods*, 2021.
-- Torchvision detection models (Faster R-CNN, RetinaNet) and COCO weights, BSD-3-Clause.
-- 3D Slicer, "CBCT Dental Surgery" sample data.
-- Akyon et al., "Slicing Aided Hyper Inference", arXiv:2202.06934. Solovyev et al., "Weighted Boxes Fusion", 2021. Lin et al., Microsoft COCO, ECCV 2014 (`pycocotools`).
-
-*AI tools used are listed in [AI_DISCLOSURE.md](AI_DISCLOSURE.md).*
+**References.** Hamamci et al., DENTEX, MICCAI 2023. Dot et al., DentalSegmentator, *Journal of Dentistry*, 2024 (Zenodo 10.5281/zenodo.10829675). Isensee et al., nnU-Net, *Nature Methods*, 2021. Akyon et al., SAHI, arXiv:2202.06934. Solovyev et al., Weighted Boxes Fusion, 2021. Lin et al., COCO, ECCV 2014 (`pycocotools`).

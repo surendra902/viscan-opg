@@ -24,9 +24,9 @@ This is a decision-support prototype built for the Viscan AI Engineer take-home 
 **Quick links**
 
 - Live demo: https://huggingface.co/spaces/surendra08/viscan-opg
-- Demo video (5-8 min, narrated): `ADD LINK HERE`
+- Demo video (5-8 min, narrated): pending — to be recorded against this build
 - Model weights: https://huggingface.co/surendra08/viscan-opg-weights
-- Technical report: [REPORT.md](REPORT.md)
+- Technical report: [REPORT.md](REPORT.md) (4-page PDF: [REPORT.pdf](REPORT.pdf))
 - AI tool disclosure: [AI_DISCLOSURE.md](AI_DISCLOSURE.md)
 
 The live demo runs this same FastAPI app on a free CPU server. On that server the 2D X-ray detector works fully, and the 3D part works only for the two bundled sample scans and for label maps you upload. Uploading a raw 3D CBCT scan there returns a clear "not available" message (HTTP 503) because the 3D model files are not installed on the free server. See [Section 7](#7-3d-cbct-bonus) for details.
@@ -69,7 +69,7 @@ The live demo runs this same FastAPI app on a free CPU server. On that server th
 
 On 50 X-rays that the model never saw during training or tuning (182 labelled findings) it reaches **mAP@50 0.496** and **mAP@50:95 0.329**. The app defaults to a confidence of 0.70, chosen on a separate 70-image validation set; at that setting the average F1 across the four classes is 0.402 on test.
 
-Impacted teeth are usable (F1 0.81). Caries, deep caries and periapical lesions are weak (F1 0.37, 0.26 and 0.17), so treat the output as a highlighter, not a filter. On a 2-core CPU an image takes about 4.6 seconds.
+Impacted teeth are usable (F1 0.81). Caries, deep caries and periapical lesions are weak (F1 0.37, 0.26 and 0.17), so treat the output as a highlighter, not a filter. Speed on this laptop: a model pass averages 9.3 s limited to two threads or 5.8 s with all ten cores, over 10 held-out images; a full request over the bundled samples takes 8.3–9.4 s, because it also decodes the file, draws the boxes and writes two PNGs. The 4.6 s figure from earlier drafts was the model alone on one image, with all cores.
 
 Per-class scores, the confusion matrix, five failure cases, training curves, the model-versus-model comparison and every caveat are in [REPORT.md](REPORT.md), Sections 5 and 6.
 
@@ -77,9 +77,27 @@ Per-class scores, the confusion matrix, five failure cases, training curves, the
 
 ## 3. Run it
 
-You need Python 3.10 or newer (tested on 3.11).
+### Option A: Docker Compose (one command)
 
-### Option A: Python
+```bash
+git clone https://github.com/surendra902/viscan-opg.git
+cd viscan-opg
+docker compose up
+```
+
+Open **http://localhost:8000** in your browser. The first start downloads `best_model.pth` (173 MB) into the `viscan-checkpoints` volume and checks it against the SHA-256 in Section 4 before loading it. The checkpoint is not baked into the image; the named volume keeps it across restarts. Results go to the `viscan-results` volume:
+
+```bash
+docker compose cp viscan:/app/results ./results
+```
+
+If the download fails, the app still starts, `/health` reports `model_loaded: false`, and `/analyze` returns HTTP 503.
+
+The image installs CPU-only PyTorch and runs as a non-root user. I ran the Python path and the smoke test below on Windows; I could not build the image on this machine because Docker is not installed here.
+
+### Option B: Python (development)
+
+You need Python 3.10 or newer (tested on 3.11).
 
 ```bash
 # 1. Get the code
@@ -97,36 +115,7 @@ pip install -r requirements.txt
 python app.py
 ```
 
-Open **http://localhost:8000** in your browser.
-
 The first start downloads `best_model.pth` (173 MB) from the weights repository and checks it against the SHA-256 in Section 4 before loading it. That happens once. To skip the download, set `VISCAN_AUTO_DOWNLOAD=0` and place the file at `checkpoints/best_model.pth` yourself. If the download fails, the app still starts, `/health` reports `model_loaded: false`, and `/analyze` returns 503.
-
-### Option B: Docker
-
-The weights are not baked into the image because they are large, so mount the folder that holds `best_model.pth`:
-
-```bash
-docker build -t viscan-opg .
-docker run -p 8000:8000 \
-  -v "$(pwd)/checkpoints:/app/checkpoints:ro" \
-  viscan-opg
-```
-
-If the weights are missing, the app still starts, but `/health` shows `model_loaded: false` and `/analyze` returns HTTP 503.
-
-To also enable raw 3D CBCT inference in Docker:
-
-```bash
-docker build --build-arg INSTALL_CBCT=true -t viscan-opg-cbct .
-docker run -p 8000:8000 \
-  -v "$(pwd)/checkpoints:/app/checkpoints:ro" \
-  -v /path/to/cbct_weights:/cbct_weights:ro \
-  -e VISCAN_CBCT_WEIGHTS_DIR=/cbct_weights \
-  viscan-opg-cbct
-
-# or with the compose profile:
-docker compose --profile cbct up viscan-cbct
-```
 
 ### Option C: Turn on live 3D CBCT inference locally
 
@@ -139,6 +128,12 @@ export VISCAN_CBCT_WEIGHTS_DIR=/path/to/extracted/folder
 # The folder must contain dataset.json and fold_0/checkpoint_final.pth
 
 python app.py
+```
+
+In Docker, put the extracted weights under `./cbct_weights` and start the CBCT service on port 8001:
+
+```bash
+docker compose --profile cbct up viscan-cbct
 ```
 
 Check what is ready without uploading anything:
@@ -158,7 +153,7 @@ curl http://localhost:8000/health
 | `best_model.pth` (2D OPG detector, Faster R-CNN) | 173,466,789 bytes (173.5 MB) | SHA-256 `e0b49b12f48fc71ec1f583db08f107650659571e7c2b9cbd454dbfed13b46a1f` | [Hugging Face](https://huggingface.co/surendra08/viscan-opg-weights) / [direct link](https://huggingface.co/surendra08/viscan-opg-weights/resolve/main/best_model.pth) | CC BY-NC-SA 4.0 |
 | `Dataset112_DentalSegmentator_v100.zip` (3D CBCT model, used as-is) | 229,747,861 bytes (219.1 MB) | MD5 `b71cd5230168d28a4f71b078265b76be` | [Zenodo 10.5281/zenodo.10829675](https://zenodo.org/records/10829675) | CC BY 4.0 |
 
-`python app.py` fetches the 2D checkpoint on first run and verifies the SHA-256 above before loading it. The commands below are for manual or air-gapped installs.
+The app fetches the 2D checkpoint on first start, from either the Docker or the Python path, and verifies the SHA-256 above before loading it. The commands below are for manual or air-gapped installs.
 
 **Verify your download:**
 
@@ -187,7 +182,7 @@ curl -X POST "http://localhost:8000/analyze?confidence_threshold=0.70" \
      -F "file=@sample_opg.png"
 ```
 
-**Example response** (shortened to 2 of 8 findings; recorded on CPU from `samples/sample_01_val_1_report.json`. The 8.3 s here comes from a slower CPU than the 4.6 s benchmark in Section 2):
+**Example response** (shortened to 2 of 8 findings; recorded on CPU from `samples/sample_01_val_1_report.json`. `inference_ms` here is the whole request — file decode, input gate, model, annotation drawing and two PNG writes — so it is larger than the model-only figure in Section 2):
 
 ```json
 {
@@ -439,7 +434,7 @@ CBCT is a 3D scan of the jaw. The same app accepts it, segments five structures 
 
 The model's own accuracy on the Post scan (model output compared with the reference mask) was a mean Dice of 0.964: maxilla 0.977, mandible 0.985, upper teeth 0.987, lower teeth 0.975, mandibular canal 0.897. These were measured in an executed Kaggle notebook, and the shipped Post demo labels are the reference mask itself, not a model prediction.
 
-**Speed and memory.** One full model run on a Kaggle Tesla T4 (Post scan) takes 131.4 s of 3D inference over 252 tiles, 5.8 s of post-processing and distance work, and 0.9 s of meshing, with a peak of 4,936 MB of GPU memory and 2,642 MB of process RAM. The pre-segmented demo bundles skip the network: about 9.6 s (Post) and 10.4 s (Pre) per request on a local CPU, with about 250 MB extra RAM, so those figures are not comparable to the 131 s one. The Pre bundle's own `run_metrics.json` claims 115.9 s and 4,725 MB, but no executed notebook backs that run, so I do not rely on it. Full provenance and file hashes are in [`samples/cbct/PROVENANCE.md`](samples/cbct/PROVENANCE.md).
+**Speed and memory.** One full model run on a Kaggle Tesla T4 (Post scan) takes 131.4 s of 3D inference over 252 tiles, 5.8 s of post-processing and distance work, and 0.9 s of meshing, with a peak of 4,936 MB of GPU memory and 2,642 MB of process RAM. The pre-segmented demo bundles skip the network: about 9.6 s (Post) and 10.4 s (Pre) per request on a local CPU, with about 250 MB extra RAM, so those figures are not comparable to the 131 s one. The Pre bundle's `run_metrics.json` is not backed by an executed notebook, so I do not report its timing or memory. Full provenance and file hashes are in [`samples/cbct/PROVENANCE.md`](samples/cbct/PROVENANCE.md).
 
 **Meshes.** The local sample files were made on a machine without `scikit-image`, so they use a simple fallback mesher and are large (28.7 MB and 35.1 MB). The Hugging Face Space installs `scikit-image` and uses Marching Cubes, which gives smaller files. Cross-sections of both volumes are in [REPORT.md](REPORT.md) §8.
 
@@ -460,7 +455,7 @@ The model's own accuracy on the Post scan (model output compared with the refere
 
 ## 8. Extra experiments
 
-These scripts exist in the repo and were all run once on the same 635 / 70 / 50 split in one Kaggle session (`kaggle_beat_benchmark_notebook.ipynb`). Results on the 50 test images:
+The P0–P7 rows come from one executed Kaggle T4 session (`kaggle_beat_benchmark_notebook.ipynb`); the 960×1600 row comes from the executed training notebook (`kaggle_notebook.ipynb`). Both use the same 635 / 70 / 50 split and evaluator. Results on the 50 test images:
 
 | Setting | Test AP | Test AP50 | Change in AP50 |
 |---|---:|---:|---:|
@@ -525,10 +520,10 @@ python cascade_refine.py apply --checkpoint checkpoints/cascade/convnext_cascade
 
 **Kaggle notebooks.**
 
-- `kaggle_notebook.ipynb`: training and the main evaluation, including the failure cases.
-- `kaggle_benchmark_notebook.ipynb`: architecture comparison in one GPU session (Faster R-CNN with and without TTA, RetinaNet, and their fusion).
-- `kaggle_beat_benchmark_notebook.ipynb`: the full ladder of experiments above, selected on validation and evaluated once on test.
-- `kaggle_cbct_notebook.ipynb` and `kaggle_cbct_scan2_notebook.ipynb`: the 3D model runs.
+- `kaggle_notebook.ipynb` (executed): training, the main evaluation and failure cases, and the 960×1600 variant.
+- `kaggle_beat_benchmark_notebook.ipynb` (executed): the P0–P7 ladder above, selected on validation and evaluated once on test.
+- `kaggle_cbct_notebook.ipynb` (executed): the Post 3D model run.
+- `experiments/notebooks/`: two unexecuted recipes (the earlier comparison and the Pre CBCT run), kept for provenance and not used as evidence.
 
 ---
 
@@ -555,9 +550,14 @@ python cascade_refine.py apply --checkpoint checkpoints/cascade/convnext_cascade
 
 ```bash
 pytest tests/ -v
+
+# end-to-end check against a running server (default http://localhost:8000)
+python scripts/smoke_test.py
 ```
 
-The tests cover DICOM brightness settings and MONOCHROME1 flipping, box clipping, API response shapes, NIfTI read/write, hand-checked nerve distances, STL/GLB export, and the 3D rules above: files are routed by content, a 2D result never claims 3D, uploaded label maps never claim the model ran, uploaded `provenance.json` is not trusted, demo scans are labelled as demos, patient tags are stripped, and raw 3D input returns 503 without weights. One test stands in for the real 3D model to prove the wiring and provenance work. It does **not** test the model's accuracy.
+`pytest` covers DICOM brightness settings and MONOCHROME1 flipping, box clipping, API response shapes, NIfTI read/write, hand-checked nerve distances, STL/GLB export, and the 3D rules above: files are routed by content, a 2D result never claims 3D, uploaded label maps never claim the model ran, uploaded `provenance.json` is not trusted, demo scans are labelled as demos, patient tags are stripped, and raw 3D input returns 503 without weights. One test stands in for the real 3D model to prove the wiring and provenance work. It does **not** test the model's accuracy.
+
+`scripts/smoke_test.py` sends five files to the live API: a sample with findings (expects 200 and boxes), a sample with no findings (expects 200 and an empty list), a text file (400), a corrupt DICOM (422, because it parses as a DICOM with no pixel data) and a red 512 × 512 PNG that is not a dental X-ray (422). It exits non-zero if any response differs. It needs the model loaded, so start the server first.
 
 ---
 
@@ -596,7 +596,7 @@ In short: the code and architecture could ship commercially, but the trained 2D 
 
 1. **Rebalance the rare classes** with focal loss or repeat-factor sampling for periapical lesion and deep caries, and use gradient accumulation at higher resolution to fix the batch-size-1 problem.
 2. **Add tooth numbers (FDI)** by training a second stage on DENTEX's quadrant/enumeration labels and matching each finding to a tooth.
-3. **Speed up CPU inference** by exporting to ONNX Runtime with INT8 quantisation, aiming well below the current 4.6 s.
+3. **Speed up CPU inference** by exporting to ONNX Runtime with INT8 quantisation, aiming well below the current 9.3 s on two threads.
 4. **Label individual teeth in 3D** by combining DentalSegmentator with ToothFairy2 instance segmentation to report third-molar position next to the nerve distance.
 
 ---
@@ -616,8 +616,10 @@ In short: the code and architecture could ship commercially, but the trained 2D 
 | `samples/` | Example inputs and outputs (2D and 3D) |
 | `assets/eval/` | Charts used in this README and the report |
 | `tests/` | Automated tests |
-| `kaggle_*.ipynb` | Notebooks used on Kaggle's free GPU |
-| `REPORT.md` | Technical report |
+| `scripts/` | CPU latency benchmark and the end-to-end smoke test |
+| `kaggle_*.ipynb` | Executed Kaggle notebooks (main, beat benchmark, CBCT) |
+| `experiments/` | Unexecuted recipes kept for provenance |
+| `REPORT.md`, `REPORT.pdf` | Technical report (the PDF is the 4-page render) |
 | `RESEARCH_BENCHMARKS.md` | DENTEX leaderboard context |
 | `AI_DISCLOSURE.md` | Which AI tools I used and for what |
 | `Dockerfile`, `docker-compose.yml` | Container setup |
