@@ -1,0 +1,138 @@
+{
+  "scope": "paired in one process: plain pass and hflip TTA pass of the same image, order alternating",
+  "tta": "both",
+  "n_images": 5,
+  "repeats_per_image": 3,
+  "threads": 2,
+  "per_image": [
+    {
+      "image": "sample_01_val_1_input.png",
+      "size": [
+        1976,
+        976
+      ],
+      "plain_pass": [
+        11221.7,
+        10801.7,
+        10803.1
+      ],
+      "hflip_pass": [
+        22813.4,
+        23941.6,
+        21989.4
+      ],
+      "mean_plain_pass": 10942.2,
+      "mean_hflip_pass": 22914.8,
+      "ratio": 2.094
+    },
+    {
+      "image": "sample_02_val_10_input.png",
+      "size": [
+        2874,
+        1316
+      ],
+      "plain_pass": [
+        14333.2,
+        10324.4,
+        11549.7
+      ],
+      "hflip_pass": [
+        21745.8,
+        21843.7,
+        25454.9
+      ],
+      "mean_plain_pass": 12069.1,
+      "mean_hflip_pass": 23014.8,
+      "ratio": 1.907
+    },
+    {
+      "image": "sample_03_val_11_input.png",
+      "size": [
+        2884,
+        1504
+      ],
+      "plain_pass": [
+        11001.4,
+        12114.0,
+        12277.2
+      ],
+      "hflip_pass": [
+        23824.0,
+        23443.6,
+        22758.5
+      ],
+      "mean_plain_pass": 11797.5,
+      "mean_hflip_pass": 23342.0,
+      "ratio": 1.979
+    },
+    {
+      "image": "sample_04_val_14_input.png",
+      "size": [
+        2728,
+        1316
+      ],
+      "plain_pass": [
+        21216.4,
+        22489.0,
+        21193.1
+      ],
+      "hflip_pass": [
+        42778.2,
+        45760.7,
+        49138.5
+      ],
+      "mean_plain_pass": 21632.8,
+      "mean_hflip_pass": 45892.5,
+      "ratio": 2.121
+    },
+    {
+      "image": "sample_05_val_21_input.png",
+      "size": [
+        2860,
+        1316
+      ],
+      "plain_pass": [
+        15743.0,
+        18883.1,
+        21141.0
+      ],
+      "hflip_pass": [
+        21952.5,
+        34247.1,
+        34013.2
+      ],
+      "mean_plain_pass": 18589.0,
+      "mean_hflip_pass": 30070.9,
+      "ratio": 1.618
+    }
+  ],
+  "environment": {
+    "platform": "Windows-10-10.0.26200-SP0",
+    "processor": "Intel64 Family 6 Model 154 Stepping 4, GenuineIntel",
+    "python": "3.11.15",
+    "torch": "2.14.1+cpu",
+    "weights": "checkpoints\\best_model.pth",
+    "weights_sha256": "e0b49b12f48fc71ec1f583db08f107650659571e7c2b9cbd454dbfed13b46a1f"
+  },
+  "plain": {
+    "mean_ms": 15006.1,
+    "median_ms": 12277.2,
+    "p95_ms": 22489.0,
+    "min_ms": 10324.4,
+    "max_ms": 22489.0
+  },
+  "hflip": {
+    "mean_ms": 29047.0,
+    "median_ms": 23824.0,
+    "p95_ms": 49138.5,
+    "min_ms": 21745.8,
+    "max_ms": 49138.5
+  },
+  "ratio": {
+    "aggregate": 1.936,
+    "per_image_mean": 1.944,
+    "per_image_median": 1.979,
+    "per_image_min": 1.618,
+    "per_image_max": 2.121
+  }
+}

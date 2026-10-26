@@ -109,9 +109,9 @@ What can be said without overreach:
 
 | Option | Why not adopted |
 |---|---|
-| Ultralytics YOLOv8/YOLO11 | Promising accuracy (Mei et al. rank 2 on diagnosis with a modified YOLOv8), but **AGPL-3.0** for code and weights. This repository is BSD-3-Clause; adding it would change the commercial-shipping posture documented in `REPORT.md` §3 and §8. Kept as a paper comparison only. |
-| DINO / DiffusionDet / Swin hierarchical | Strongest published results, but no BSD torchvision implementation, materially higher CPU cost than the current 4.6 s budget, and a training pipeline we cannot validate here. |
-| Two-stage tooth → finding cascade | The literature's dominant pattern (DETDet, HierarchicalDet, He et al.), but it needs FDI enumeration labels, a new label-conversion path, and a `tooth_fdi` field in the API. Deferred as roadmap, not claimed as done. |
+| Ultralytics YOLOv8/YOLO11 | Promising accuracy (Mei et al. rank 2 on diagnosis with a modified YOLOv8), but **AGPL-3.0** for code and weights. This repository is BSD-3-Clause; adding it would change the commercial-shipping posture documented in `REPORT.md` §4 and §9. Kept as a paper comparison only. |
+| DINO / DiffusionDet / Swin hierarchical | Strongest published results, but no BSD torchvision implementation, materially higher CPU cost than the current single pass (`REPORT.md` §5: 9.3 s mean for one forward pass on two CPU threads, before any decode or drawing), and a training pipeline we cannot validate here. |
+| Two-stage tooth → finding cascade | The literature's dominant pattern (DETDet, HierarchicalDet, He et al.). DENTEX's FDI enumeration labels are now read by `scripts/dentex_fdi.py`, and the API carries `tooth_fdi`. What is still missing is the tooth-detection stage: today's number comes from the position of a finding box, right on 0.543 of validation boxes. The cascade stays roadmap, not claimed as done. |
 
 ### Adopted benchmark architecture (all BSD-3-Clause)
 
@@ -125,7 +125,7 @@ RetinaNet   R50-FPN-V2 @800×1333 ──┘        │
 - **Members:** the deployed Faster R-CNN checkpoint and a RetinaNet trained on the identical split, seed,
   schedule and input scale (`configs/retinanet.yaml`). Both torchvision, BSD-3-Clause.
 - **Views:** each detector runs on the full image and on overlapping 800×800 native-scale crops
-  (`slice_inference.py`). Full-image inference downscales DENTEX images by 0.425–0.675× (mean 0.474×);
+  (`experiments/slice_inference.py`). Full-image inference downscales DENTEX images by 0.425–0.675× (mean 0.474×);
   800×800 crops are processed at 1:1 inside `min_size=800, max_size=1333`, so lesion pixels are not thrown away.
 - **TTA:** original + horizontally flipped inference, boxes mirrored back, merged with class-wise NMS.
 - **Fusion:** weighted box fusion, the rule used by He et al. and DETDet.
@@ -155,10 +155,10 @@ Evidence for each component, and what is *not* evidence:
 |---|---|---|---|
 | E1 | Architecture: RetinaNet vs Faster R-CNN | `train.py --config configs/retinanet.yaml`, then `evaluate.py --select_threshold val --skip_variant` | Adopt RetinaNet only if test AP50 or AP improves; report the loss otherwise. |
 | E2 | hflip TTA ablation | `evaluate.py ... --tta hflip --dump_predictions preds_a` | Keep only if test AP50/AP improves; latency doubles by construction. |
-| E3 | WBF ensemble | `ensemble_wbf.py` over the two members' dumps | Adopt for benchmark if AP50/AP improves; adopt for deployment only if latency is acceptable. |
-| E4 | Native-scale sliced inference | `slice_inference.py --views both --tile 800 --overlap 0.25`, fuse with `ensemble_wbf.py` | Keep only if fused AP50/AP improves over E2/E3 on test. |
-| E5 | ConvNeXt-Tiny crop refiner | `cascade_refine.py build/train/apply`, fuse the rescored dump | Keep only if fused AP50/AP improves; `reclass` must also not lower per-class AP. |
-| E6 | Tooth → finding cascade (deferred) | requires enumeration labels + API `tooth_fdi` | Revisit after E1–E5. |
+| E3 | WBF ensemble | `experiments/ensemble_wbf.py` over the two members' dumps | Adopt for benchmark if AP50/AP improves; adopt for deployment only if latency is acceptable. |
+| E4 | Native-scale sliced inference | `experiments/slice_inference.py --views both --tile 800 --overlap 0.25`, fuse with `experiments/ensemble_wbf.py` | Keep only if fused AP50/AP improves over E2/E3 on test. |
+| E5 | ConvNeXt-Tiny crop refiner | `experiments/cascade_refine.py build/train/apply`, fuse the rescored dump | Keep only if fused AP50/AP improves; `reclass` must also not lower per-class AP. |
+| E6 | Tooth → finding cascade (deferred) | the API `tooth_fdi` field and the enumeration-label path now exist (`fdi.py`, `scripts/dentex_fdi.py`); a trained tooth detector is still missing | Revisit after E1–E5. |
 
 Pipeline selection uses **validation mAP only**; the test split is read once per pipeline at the end. The notebook
 reports every measured row, including the ones that lost.

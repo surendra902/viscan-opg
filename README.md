@@ -57,7 +57,8 @@ The live demo runs this same FastAPI app on a free CPU server. On that server th
 - **Accepts** PNG, JPG and single-frame 2D DICOM (`.dcm`) X-rays.
 - **Checks the file first.** For DICOM it applies the right brightness/contrast settings (Modality LUT and VOI LUT windowing) and flips "inverted" images (MONOCHROME1) so bones look right. It rejects blank images, screenshots, text documents, colour photos, corrupt files and multi-frame DICOMs with a clear error message instead of crashing.
 - **Finds** the four conditions above and returns the position of each in the original image's pixel coordinates, with a confidence score.
-- **Draws** a box per finding, coloured by class and labelled with class name and confidence.
+- **Numbers the tooth.** Each finding carries an estimated two-digit FDI tooth number, from the box position against a geometry table fitted on DENTEX's own quadrant and tooth labels. It is labelled as an estimate everywhere it appears, because it is a position rule and not a tooth detector: on the validation split it is right on 0.976 of boxes for the quadrant and 0.543 for the exact number (Section 6).
+- **Draws** a box per finding, coloured by class and labelled with class name, confidence and the estimated tooth number.
 - **Reports** the findings as JSON and as a one-line summary, for example "8 findings: 5 caries, 3 impacted tooth."
 - **Shows** the original and annotated images side by side in a simple web page, with a confidence slider and download buttons.
 - **Protects privacy.** Patient details in DICOM files are stripped and never appear in the output.
@@ -69,7 +70,9 @@ The live demo runs this same FastAPI app on a free CPU server. On that server th
 
 On 50 X-rays that the model never saw during training or tuning (182 labelled findings) it reaches **mAP@50 0.496** and **mAP@50:95 0.329**. The app defaults to a confidence of 0.70, chosen on a separate 70-image validation set; at that setting the average F1 across the four classes is 0.402 on test.
 
-Impacted teeth are usable (F1 0.81). Caries, deep caries and periapical lesions are weak (F1 0.37, 0.26 and 0.17), so treat the output as a highlighter, not a filter. Speed on this laptop: a model pass averages 9.3 s limited to two threads or 5.8 s on all ten cores over 10 held-out images; full requests over the bundled samples take 4.1–6.6 s. Single-image timings vary by about ±25%, so those ranges overlap. Earlier figures of 4.6 s and 8.3 s were the model alone on one image and one recorded request respectively; re-sending that sample today took 4.1 s.
+Impacted teeth are usable (F1 0.81). Caries, deep caries and periapical lesions are weak (F1 0.37, 0.26 and 0.17), so treat the output as a highlighter, not a filter.
+
+Speed on this laptop moves more than anything I changed in the model. One forward pass over the five bundled samples averages 11.1 s on two CPU threads and 8.3 s on all ten ([`assets/eval/cpu_latency_5_t2.json`](assets/eval/cpu_latency_5_t2.json), [`assets/eval/cpu_latency_5_t10.json`](assets/eval/cpu_latency_5_t10.json)); the same two-thread setting measured 15.0 s half an hour earlier, and a 10-image held-out set measured 9.3 s on two threads and 5.8 s on ten in an earlier session. A full request — decode, the file check, the model, drawing and two PNG writes — measured 4.1–6.6 s against a warm server in one session and 9.4–19.3 s in another ([`assets/eval/live_request_latency.json`](assets/eval/live_request_latency.json)). The `inference_ms` inside each `samples/*_report.json` is one request from the run that wrote it. Read these as machine state, not a spec: the one CPU number I quote as a property of a method is the paired mirror-pass ratio in Section 8 (1.94×), because both passes are timed in the same process.
 
 Per-class scores, the confusion matrix, five failure cases, training curves, the model-versus-model comparison and every caveat are in [REPORT.md](REPORT.md), Sections 5 and 6.
 
@@ -93,7 +96,7 @@ docker compose cp viscan:/app/results ./results
 
 If the download fails, the app still starts, `/health` reports `model_loaded: false`, and `/analyze` returns HTTP 503.
 
-The image installs CPU-only PyTorch and runs as a non-root user. I ran the Python path and the smoke test below on Windows; I could not build the image on this machine because Docker is not installed here.
+The image installs CPU-only PyTorch and runs as a non-root user. It is built and tested on a clean Ubuntu runner on every push (`.github/workflows/docker-smoke.yml`): the job runs `docker compose up -d --build viscan`, waits for `/health` to report `model_loaded: true`, then runs `scripts/smoke_test.py` inside the container. The build log resolves `torch-2.14.1+cpu` and `torchvision-0.29.1+cpu`, so `requirements.txt` does not replace them with CUDA wheels.
 
 ### Option B: Python (development)
 
@@ -189,19 +192,28 @@ curl -X POST "http://localhost:8000/analyze?confidence_threshold=0.70" \
   "image_id": "sample_01_val_1",
   "modality": "OPG",
   "model": { "name": "fasterrcnn_resnet50_fpn_v2", "version": "2.0.0" },
-  "inference_ms": 8301.8,
+  "tooth_numbering": {
+    "basis": "arch_geometry",
+    "note": "tooth_fdi is a position-based estimate from fitted arch geometry, not a tooth detection: a wrong box or a wrong class gives a wrong number.",
+    "fitted_on": "train (635 images of the 705-image pool, seed=42)",
+    "dataset_revision": "7b27ccc8e342dcb774f69adc6ca5e6c09fefce93",
+    "held_out_validation": { "n_boxes": 339, "fdi_exact": 0.5428, "quadrant": 0.9764, "tooth_digit": 0.5487 }
+  },
+  "inference_ms": 13009.3,
   "findings": [
     {
       "class": "impacted_tooth",
       "confidence": 0.99,
-      "tooth_fdi": null,
-      "bbox": [1260.5, 176.1, 1391.4, 301.8]
+      "tooth_fdi": 26,
+      "tooth_fdi_basis": "arch_geometry",
+      "bbox": [1259.6, 171.7, 1394.7, 308.2]
     },
     {
       "class": "caries",
-      "confidence": 0.98,
-      "tooth_fdi": null,
-      "bbox": [1142.7, 460.4, 1323.1, 663.3]
+      "confidence": 0.94,
+      "tooth_fdi": 35,
+      "tooth_fdi_basis": "arch_geometry",
+      "bbox": [1146.8, 467.0, 1316.2, 653.7]
     }
   ],
   "summary": "8 findings: 5 caries, 3 impacted tooth.",
@@ -220,9 +232,13 @@ curl -X POST "http://localhost:8000/analyze?confidence_threshold=0.70" \
 | `class` | One of `caries`, `deep_caries`, `periapical_lesion`, `impacted_tooth` |
 | `confidence` | How sure the model is, from 0 to 1 |
 | `bbox` | `[x_min, y_min, x_max, y_max]` in the original image's pixels |
-| `tooth_fdi` | Tooth number. Always `null` for now because the model does not predict tooth numbers yet |
+| `tooth_fdi` | Estimated FDI tooth number for that box (two digits: quadrant + tooth position), or `null` if no geometry table is fitted |
+| `tooth_fdi_basis` | Always `arch_geometry` today: the number comes from the box's position on the fitted arch, not from a tooth detector |
+| `tooth_numbering` | Provenance for those numbers: what they are, which split fitted them, and the held-out accuracy. `null` when `assets/fdi/fdi_geometry.json` is missing |
 | `inference_ms` | Time taken on the server, in milliseconds |
 | `three_d_available` | Always `false` for a 2D X-ray |
+
+`tooth_fdi` is the honest kind of extra: DENTEX labels each box with a quadrant and a tooth position, so I fitted those two axes into a geometry table and read a number off the box centre. It is not a tooth detector, the annotated PNG marks it `(est)`, and "Fitting the tooth numbers" in Section 6 gives the measured accuracy.
 
 ### Errors and limits
 
@@ -346,6 +362,15 @@ The 70 validation images were carved out of the 705-image training archive using
 
 **Avoiding leakage:** I checked in code that no filename appears in more than one split, and labels are matched to images by ID. DENTEX has no patient identifiers, so I cannot rule out that two X-rays come from the same patient.
 
+**The extra classes the brief mentions are not in this dataset.** Every DENTEX box carries three label levels: quadrant (`category_id_1`), tooth position (`category_id_2`) and diagnosis (`category_id_3`), and the diagnosis level has exactly the four values in the table above (`prepare_data.py` maps 0-3 to `impacted_tooth`, `caries`, `periapical_lesion`, `deep_caries`). There are no restoration, root-canal-filling, missing-tooth or bone-loss labels to train on, so I did not add those classes and I do not report them. The two label axes DENTEX *does* have beyond the diagnosis — quadrant and tooth position — are the ones now surfaced as `tooth_fdi` ("Fitting the tooth numbers" below).
+
+For the record, sets that do carry those classes exist, but none of them is a config change away:
+
+| Source | What it labels | Why it is not in this submission |
+|---|---|---|
+| Zenodo record 15487430 (Automating Dental Condition Detection on Panoramic Radiographs, 1,628 train + 180 val OPG JPEGs, YOLO boxes, 14 classes) | Caries, apical periodontitis, impacted tooth, bone resorption, furcation involvement, root fragment, and hardware/obturation classes | The record's licence line is CC BY 4.0 but also states "solely for non-commercial research and educational purposes", and merging it means re-training on a new split with a class-mapping table. Not measurable by 27 October. |
+| Zhou et al. 2024 dual-labelled OPG set (2,066 images, tooth polygons with FDI numbers, 7 tooth-state labels including fillings and root-canal treatment) | Tooth geometry and tooth states, as polygons rather than lesion boxes | Already excluded above for the four required findings; its tooth states are per-tooth polygons, so they need a different detector head. Licence terms on the distribution page are not verified here. |
+
 **Image sizes:** widths 1,976-3,139 px (mean 2,830) and heights 976-1,536 px (mean 1,367). Images are shrunk to fit 800 x 1333 for the model (about 0.47x on average), which makes tiny lesions harder to see.
 
 **Preparation and label conversion:**
@@ -369,7 +394,7 @@ This downloads DENTEX at the pinned version, creates the split, copies images in
 
 ### Which model, and why
 
-I compared Faster R-CNN with YOLO on paper and trained Faster R-CNN (and RetinaNet as a second trained comparison, see Section 8).
+I compared Faster R-CNN with YOLO on paper and trained Faster R-CNN. I also trained a RetinaNet (Section 8), but it never converged, so it is not evidence about the architecture.
 
 | | Faster R-CNN ResNet-50 FPN V2 (chosen) | Ultralytics YOLO11n (alternative) |
 |---|---|---|
@@ -405,6 +430,30 @@ python evaluate.py --weights checkpoints/best_model.pth --data_dir data/dentex
 ```
 
 This computes overall and per-class mAP@50 and mAP@50:95, per-class precision/recall/F1 at the chosen threshold, the confusion matrix, five failure cases (saved to `evaluation_results/failures/`) and CPU speed per image. The test-set numbers are in [REPORT.md](REPORT.md) §5, the confusion matrix in §5.3, and the five failure cases in §6.1.
+
+### Fitting the tooth numbers (`tooth_fdi`)
+
+DENTEX's diagnosis level has only four classes, but every box also carries a quadrant and a tooth position. I used those two axes to answer "which tooth is this finding on?" without training a second detector. `fdi.py` fits a geometry table and `scripts/dentex_fdi.py` builds it:
+
+1. **Fetch the labels.** `python scripts/dentex_fdi.py fetch` range-reads one member (1.2 MB of annotation JSON) out of the 10.9 GB `training_data.zip` over HTTP 206 responses, so it never downloads the archives.
+2. **Fit on train only.** `python scripts/dentex_fdi.py fit --json data/dentex/raw/train_quadrant_enumeration_disease.json` takes the 3,190 boxes in the 635-image train split, finds the midline and arch-level thresholds that misclassify the fewest boxes, then fits one centroid per tooth position inside each quadrant. The one free knob (how much vertical distance counts against horizontal distance) is tuned on a one-in-five image holdout **inside** the train pool; `v_weight=0.0` won, meaning horizontal position alone is the better predictor on panoramic images.
+3. **Measure on validation.** The same command scores the frozen table on the 70-image validation split, which nothing in this pipeline selected on.
+
+Measured on ground-truth boxes of the validation split (339 boxes, all assigned a number):
+
+| Check | Accuracy |
+|---|---:|
+| Correct quadrant (right/left of midline **and** above/below the arch line) | 0.976 |
+| Correct tooth digit inside that quadrant | 0.549 |
+| Correct two-digit FDI number | 0.543 |
+
+Read this as the ceiling of the position estimator, not of the product. It is scored on expert boxes; on detected boxes it inherits every detection error, so a missed or misplaced lesion takes a correct number with it. The common failure is the neighbour: caries boxes often straddle two teeth, and an impacted tooth that never erupted has no correct FDI number in the first place. The fitted table ships as `assets/fdi/fdi_geometry.json` (5 kB of numbers), so a clean clone plus `python app.py` returns tooth numbers with no download step; if that file is missing the service leaves `tooth_fdi` as `null` rather than guessing.
+
+To re-measure without re-fitting:
+
+```bash
+python scripts/dentex_fdi.py eval --json data/dentex/raw/train_quadrant_enumeration_disease.json
+```
 
 ### Why I haven't claimed more
 
@@ -470,9 +519,9 @@ The P0–P7 rows come from one executed Kaggle T4 session (`kaggle_beat_benchmar
 | Tiles + crop checker (re-label) | 0.170 | 0.272 | -0.224 |
 | Tiles + RetinaNet + checker (re-label) | 0.144 | 0.236 | -0.260 |
 
-Only mirror averaging beat the baseline on detection score. I still ship the single pass, because mirroring doubles the compute and its F1 at its own best threshold (0.399) is not better than the baseline (0.402). The larger-input run drew tighter boxes (mAP@75 0.383 to 0.410) and found impacted teeth better (AP@50 0.833 to 0.915), but lost on overall AP and on deep caries (0.457 to 0.365), and its batch size changed too, so resolution is not isolated. Per-class detail and the reasoning behind each row are in [REPORT.md](REPORT.md) §5.5; `RESEARCH_BENCHMARKS.md` lists the verified DENTEX 2023 leaderboard figures for context.
+Only mirror averaging beat the baseline on detection score, and I still ship the single pass. I measured what it costs with `scripts/benchmark_cpu.py --tta both`, which times the plain pass and the mirrored pass as paired runs of the same image inside one process: mirroring takes 1.94× the single pass (median per image 1.98×, range 1.62–2.12×), turning a 12.3 s median pass into 23.8 s on the five bundled samples at two threads ([`assets/eval/cpu_latency_tta_paired_t2.json`](assets/eval/cpu_latency_tta_paired_t2.json)). Comparing two separate runs had suggested only 1.44×, so I quote the paired numbers. For that doubling the gain is +0.032 AP50 on 50 images with no confidence interval, and F1 at its own best threshold (0.399) is no better than the baseline (0.402). The larger-input run drew tighter boxes (mAP@75 0.383 to 0.410) and found impacted teeth better (AP@50 0.833 to 0.915), but lost on overall AP and on deep caries (0.457 to 0.365), and its batch size changed too, so resolution is not isolated. Per-class detail and the reasoning behind each row are in [REPORT.md](REPORT.md) §5 and §6; `RESEARCH_BENCHMARKS.md` lists the verified DENTEX 2023 leaderboard figures for context.
 
-**RetinaNet comparison.** `configs/retinanet.yaml` uses the same data, seed, schedule and image size, but RetinaNet (one-stage, focal loss) instead of Faster R-CNN, so test scores isolate the architecture.
+**RetinaNet comparison.** `configs/retinanet.yaml` uses the same data, seed, schedule and image size, but RetinaNet (one-stage, focal loss) instead of Faster R-CNN. It did not converge — validation mAP@50 was 0.0783 at epoch 12/12 and still rising — so its test score is not a measured architecture comparison ([REPORT.md](REPORT.md) §4).
 
 ```bash
 python train.py --config configs/retinanet.yaml
@@ -481,14 +530,27 @@ python evaluate.py --weights checkpoints/retinanet/best_model.pth \
   --skip_variant --select_threshold val
 ```
 
-**Test-time augmentation (flip) and box fusion (WBF).** Run the model on the image and its mirror, or on two models, then merge their boxes.
+**Test-time augmentation (flip) and box fusion (WBF).** Run the model on the image and its mirror, or on two models, then merge their boxes. The paired run behind the cost figure above, plus the single-pass and live-request runs behind the ranges in Section 2:
+
+```bash
+python scripts/benchmark_cpu.py --images samples --limit 5 --repeats 3 --threads 2 --tta both \
+  --output assets/eval/cpu_latency_tta_paired_t2.json
+python scripts/benchmark_cpu.py --images samples --limit 5 --repeats 3 --threads 2 \
+  --output assets/eval/cpu_latency_5_t2.json
+python scripts/benchmark_cpu.py --images samples --limit 5 --repeats 3 --threads 10 \
+  --output assets/eval/cpu_latency_5_t10.json
+
+# Full request through a running server: start python app.py first.
+python scripts/benchmark_cpu.py --images samples --limit 5 --repeats 2 \
+  --service-url http://localhost:8000 --output assets/eval/live_request_latency.json
+```
 
 ```bash
 python evaluate.py --weights checkpoints/best_model.pth --data_dir data/dentex \
   --output_dir evaluation_tta --skip_variant --select_threshold val \
   --tta hflip --dump_predictions preds_frcnn_tta
 
-python ensemble_wbf.py \
+python experiments/ensemble_wbf.py \
   --gt data/dentex/annotations/instances_test.json --images_dir data/dentex/images/test \
   --preds preds_frcnn/predictions_test.json preds_retinanet/predictions_test.json \
   --val-gt data/dentex/annotations/instances_val.json \
@@ -501,7 +563,7 @@ The fusion script does not time the ensemble. Its real speed is the sum of its m
 **Sliced inference at full resolution.** Normal inference shrinks images by about half. This script also runs on overlapping 800 x 800 crops at native resolution (about 10 passes per image), which can help small lesions but is much slower, so it is a benchmark tool and not part of the deployed model.
 
 ```bash
-python slice_inference.py --weights checkpoints/best_model.pth --config configs/baseline.yaml \
+python experiments/slice_inference.py --weights checkpoints/best_model.pth --config configs/baseline.yaml \
   --split val --data_dir data/dentex --output_dir preds_slice --views both \
   --tile 800 --overlap 0.25 --tta hflip --max_dets_tile 100
 ```
@@ -509,9 +571,9 @@ python slice_inference.py --weights checkpoints/best_model.pth --config configs/
 **Crop re-scoring.** A small ConvNeXt-Tiny classifier (BSD-3-Clause) trained only on training-split ground-truth crops double-checks each detected box using a 1.3x wider crop.
 
 ```bash
-python cascade_refine.py build --data_dir data/dentex --output_dir checkpoints/cascade
-python cascade_refine.py train --bank_dir checkpoints/cascade --output checkpoints/cascade/convnext_cascade.pth
-python cascade_refine.py apply --checkpoint checkpoints/cascade/convnext_cascade.pth \
+python experiments/cascade_refine.py build --data_dir data/dentex --output_dir checkpoints/cascade
+python experiments/cascade_refine.py train --bank_dir checkpoints/cascade --output checkpoints/cascade/convnext_cascade.pth
+python experiments/cascade_refine.py apply --checkpoint checkpoints/cascade/convnext_cascade.pth \
   --preds preds_slice/predictions_val_full.json --split val --data_dir data/dentex \
   --mode rescore --output_dir preds_cascade
 ```
@@ -533,10 +595,14 @@ python cascade_refine.py apply --checkpoint checkpoints/cascade/convnext_cascade
 
   ```bash
   python generate_samples.py --weights checkpoints/best_model.pth \
-    --images <five OPGs> \
+    --images samples/sample_01_val_1_input.png samples/sample_02_val_10_input.png \
+             samples/sample_03_val_11_input.png samples/sample_04_val_14_input.png \
+             samples/sample_05_val_21_input.png \
     --names sample_01_val_1 sample_02_val_10 sample_03_val_11 sample_04_val_14 sample_05_val_21 \
     --output samples
   ```
+
+  Each `*_report.json` is the response the shipped service returned for the `*_input.png` sitting next to it — the current bundles were generated by feeding those five files back in, so a reviewer can reproduce them without downloading DENTEX. Re-running the command over the shipped inputs is a no-op on the images and rewrites the reports and annotated pictures. Every finding in them carries `tooth_fdi` and `tooth_fdi_basis`, and the response carries the `tooth_numbering` provenance block. The `inference_ms` in each file is one recorded request from that run, not a benchmark; Section 2 gives the measured spread, which on this machine is wide. Run one batch of this at a time: it is CPU-saturating work, and a second process over the same `samples/_tmp` directory both contaminates the timings and deletes files the first one is using.
 
 - **3D CBCT:** `samples/cbct/` holds the two demo bundles, preview images, 5 STL files, a GLB scene, the recorded JSON, and `PROVENANCE.md`. To regenerate:
 
@@ -555,9 +621,13 @@ pytest tests/ -v
 python scripts/smoke_test.py
 ```
 
-`pytest` covers DICOM brightness settings and MONOCHROME1 flipping, box clipping, API response shapes, NIfTI read/write, hand-checked nerve distances, STL/GLB export, and the 3D rules above: files are routed by content, a 2D result never claims 3D, uploaded label maps never claim the model ran, uploaded `provenance.json` is not trusted, demo scans are labelled as demos, patient tags are stripped, and raw 3D input returns 503 without weights. One test stands in for the real 3D model to prove the wiring and provenance work. It does **not** test the model's accuracy.
+`pytest` covers DICOM brightness settings and MONOCHROME1 flipping, box clipping, API response shapes, the tooth-numbering geometry (FDI convention, quadrant order, monotone tooth digits, clipping, and the rule that the shipped table is fitted on train and measured on a split it never selected on), NIfTI read/write, hand-checked nerve distances, STL/GLB export, and the 3D rules above: files are routed by content, a 2D result never claims 3D, uploaded label maps never claim the model ran, uploaded `provenance.json` is not trusted, demo scans are labelled as demos, patient tags are stripped, and raw 3D input returns 503 without weights. One test stands in for the real 3D model to prove the wiring and provenance work. It does **not** test the model's accuracy.
 
-`scripts/smoke_test.py` sends five files to the live API: a sample with findings (expects 200 and boxes), a sample with no findings (expects 200 and an empty list), a text file (400), a corrupt DICOM (422, because it parses as a DICOM with no pixel data) and a red 512 × 512 PNG that is not a dental X-ray (422). It exits non-zero if any response differs. It needs the model loaded, so start the server first.
+`scripts/smoke_test.py` runs 9 checks against a live server and sends it 7 files: a bundled sample with findings (expects 200, at least one box, and an integer `tooth_fdi` plus a `tooth_numbering` provenance block on every finding), a sample with no findings (200 and an empty list), a text file (400), a corrupt DICOM (422, because it parses as a DICOM with no pixel data), a red 512 × 512 PNG that is not a dental X-ray (422), a continuous-tone grayscale 2:1 PNG (200 — the heuristic gate cannot tell it from a radiograph, so this check records the documented false accept) and a synthetic MONOCHROME1 DICOM carrying `DOE^JOHN` and `PHI-TEST-123` (200, and the check fails if either string appears anywhere in the response). It exits non-zero if any response differs. It needs the model loaded, so start the server first.
+
+Both were last run on this laptop on 26 October 2026 against `python app.py` on Windows: `pytest tests/ -q` ended `71 passed, 5 warnings in 17.85s` and `python scripts/smoke_test.py` ended `9 passed, 0 failed`.
+
+The report's page limit is checked the same way as the code: `python scripts/render_report_pdf.py` re-renders `REPORT.md` through Chrome, prints where each page's content ends and exits non-zero if `REPORT.pdf` goes past four pages. Its last run printed `words: 2982  pages: 4`.
 
 ---
 
@@ -571,6 +641,7 @@ python scripts/smoke_test.py
 | nnU-Net v2 | Apache-2.0 | Yes, with attribution |
 | DentalSegmentator weights (3D) | CC BY 4.0 | Yes, with credit |
 | **DENTEX dataset and my fine-tuned 2D weights `best_model.pth`** | **CC BY-NC-SA 4.0** | **No. Non-commercial research and evaluation only.** A commercial product would need retraining on commercially cleared data or a licence from the DENTEX authors. |
+| DENTEX images in `samples/` and the figures derived from them | CC BY-NC-SA 4.0 | No. Included for evaluation and demonstration only; the BSD-3-Clause licence covers the code, not these images. |
 | Ultralytics YOLO (not used) | AGPL-3.0 | Only if you open-source your service or buy an enterprise licence |
 | CBCT demo scans (3D Slicer sample data) | Slicer BSD-style licence | Confirm with the Slicer project before commercial reuse |
 
@@ -584,7 +655,8 @@ In short: the code and architecture could ship commercially, but the trained 2D 
 
 - Misses most periapical lesions and many deep caries at the default 0.70 setting.
 - Many caries false alarms on low-contrast gaps between teeth and around fillings.
-- Does not give tooth numbers (`tooth_fdi` is always `null`).
+- `tooth_fdi` is a position estimate, not a tooth detection: it reads the box centre against a geometry table fitted on DENTEX train boxes, and it is only right on 0.543 of validation boxes (0.976 get the quadrant right). A wrong box or a wrong class carries the wrong number with it, and the annotated PNG says `(est)` for that reason.
+- The detector labels four findings only, because that is all DENTEX labels. No restorations, root-canal fillings, missing teeth or bone loss (Section 6 data card).
 - The test set is small (50 images), so per-class numbers are rough.
 - The "is this a dental X-ray?" check uses simple image rules (aspect ratio, colour, contrast, histogram), not a trained classifier, so unusual X-rays may be wrongly rejected.
 - Trained on one dataset only. Performance on other clinics' machines is unknown.
@@ -595,9 +667,10 @@ In short: the code and architecture could ship commercially, but the trained 2D 
 **With two more weeks**
 
 1. **Rebalance the rare classes** with focal loss or repeat-factor sampling for periapical lesion and deep caries, and use gradient accumulation at higher resolution to fix the batch-size-1 problem.
-2. **Add tooth numbers (FDI)** by training a second stage on DENTEX's quadrant/enumeration labels and matching each finding to a tooth.
-3. **Speed up CPU inference** by exporting to ONNX Runtime with INT8 quantisation, aiming well below the current 9.3 s on two threads.
-4. **Label individual teeth in 3D** by combining DentalSegmentator with ToothFairy2 instance segmentation to report third-molar position next to the nerve distance.
+2. **Make tooth numbers anatomical rather than geometric**: detect and number the teeth themselves (a tooth-instance stage, or the FDI-labelled tooth polygons in the Zhou et al. set) so `tooth_fdi` comes from the anatomy in the image instead of the position of a lesion box.
+3. **Add classes DENTEX cannot supply** — restorations, root-canal fillings, missing teeth, bone loss — by training on a second annotated set such as Zenodo record 15487430, with a published class map, per-source licences recorded in the data card, and the DENTEX 50-image test split kept untouched as the only test set.
+4. **Speed up CPU inference** by exporting to ONNX Runtime with INT8 quantisation, aiming well below the current 9.3 s on two threads.
+5. **Label individual teeth in 3D** by combining DentalSegmentator with ToothFairy2 instance segmentation to report third-molar position next to the nerve distance.
 
 ---
 
@@ -607,19 +680,20 @@ In short: the code and architecture could ship commercially, but the trained 2D 
 |---|---|
 | `app.py`, `service.py` | The web app and the FastAPI endpoints |
 | `imaging.py`, `input_gate.py` | Loading images and DICOM, and the "is this a dental X-ray?" check |
+| `fdi.py` | The arch-geometry table behind `tooth_fdi`: fit, assign and load |
 | `model.py`, `train.py`, `evaluate.py` | The detector, training and testing |
 | `prepare_data.py` | Downloads and splits DENTEX |
 | `cbct_pipeline.py`, `build_cbct_bundles.py`, `generate_cbct_samples.py` | 3D scan processing and demo bundles |
-| `slice_inference.py`, `ensemble_wbf.py`, `cascade_refine.py` | Extra experiments (Section 8) |
 | `generate_samples.py` | Rebuilds the 2D sample outputs |
 | `configs/` | One settings file per training run |
 | `samples/` | Example inputs and outputs (2D and 3D) |
-| `assets/eval/` | Charts used in this README and the report |
+| `assets/eval/` | Charts and measured latency/accuracy JSON used in this README and the report |
+| `assets/fdi/fdi_geometry.json` | The fitted tooth-numbering table the service loads at startup |
 | `tests/` | Automated tests |
-| `scripts/` | CPU latency benchmark and the end-to-end smoke test |
+| `scripts/` | CPU latency benchmark (model-only and live-request), the DENTEX tooth-label fetch/fit/measure tool, the end-to-end smoke test, and the REPORT.md → PDF renderer |
 | `kaggle_*.ipynb` | Executed Kaggle notebooks (main, beat benchmark, CBCT) |
-| `experiments/` | Unexecuted recipes kept for provenance |
-| `REPORT.md`, `REPORT.pdf` | Technical report (the PDF is the 4-page render) |
+| `experiments/` | Extra experiments (Section 8): sliced inference, WBF fusion, the crop checker, and two unexecuted notebook recipes kept for provenance |
+| `REPORT.md`, `REPORT.pdf` | Technical report. `python scripts/render_report_pdf.py` rebuilds the PDF and exits non-zero if it no longer fits four pages; it needs Google Chrome plus `markdown` and `pymupdf`, which are documentation tools and deliberately not in `requirements.txt`. |
 | `RESEARCH_BENCHMARKS.md` | DENTEX leaderboard context |
 | `AI_DISCLOSURE.md` | Which AI tools I used and for what |
 | `Dockerfile`, `docker-compose.yml` | Container setup |

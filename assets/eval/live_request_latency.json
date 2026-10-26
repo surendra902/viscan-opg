@@ -1,0 +1,99 @@
+{
+  "scope": "full /analyze request through a running server: file decode, input gate, model pass, annotation drawing and two PNG writes. wall_ms adds the upload and JSON parse.",
+  "service_url": "http://localhost:8000",
+  "server_threads": "torch default (the app sets no thread count)",
+  "n_images": 10,
+  "repeats_per_image": 2,
+  "per_request": [
+    {
+      "image": "sample_01_val_1_input.png",
+      "http_status": 200,
+      "server_inference_ms": 18616.1,
+      "n_findings": 8,
+      "wall_ms": 19283.1
+    },
+    {
+      "image": "sample_01_val_1_input.png",
+      "http_status": 200,
+      "server_inference_ms": 19313.3,
+      "n_findings": 8,
+      "wall_ms": 19883.3
+    },
+    {
+      "image": "sample_02_val_10_input.png",
+      "http_status": 200,
+      "server_inference_ms": 11455.5,
+      "n_findings": 12,
+      "wall_ms": 12094.5
+    },
+    {
+      "image": "sample_02_val_10_input.png",
+      "http_status": 200,
+      "server_inference_ms": 13380.4,
+      "n_findings": 12,
+      "wall_ms": 13814.9
+    },
+    {
+      "image": "sample_03_val_11_input.png",
+      "http_status": 200,
+      "server_inference_ms": 11241.6,
+      "n_findings": 0,
+      "wall_ms": 11771.1
+    },
+    {
+      "image": "sample_03_val_11_input.png",
+      "http_status": 200,
+      "server_inference_ms": 10220.5,
+      "n_findings": 0,
+      "wall_ms": 10490.8
+    },
+    {
+      "image": "sample_04_val_14_input.png",
+      "http_status": 200,
+      "server_inference_ms": 14341.7,
+      "n_findings": 6,
+      "wall_ms": 14595.1
+    },
+    {
+      "image": "sample_04_val_14_input.png",
+      "http_status": 200,
+      "server_inference_ms": 9956.7,
+      "n_findings": 6,
+      "wall_ms": 10211.8
+    },
+    {
+      "image": "sample_05_val_21_input.png",
+      "http_status": 200,
+      "server_inference_ms": 9375.0,
+      "n_findings": 5,
+      "wall_ms": 9669.4
+    },
+    {
+      "image": "sample_05_val_21_input.png",
+      "http_status": 200,
+      "server_inference_ms": 16560.7,
+      "n_findings": 5,
+      "wall_ms": 17344.2
+    }
+  ],
+  "server_inference": {
+    "mean_ms": 13446.1,
+    "median_ms": 12418.0,
+    "p95_ms": 19313.3,
+    "min_ms": 9375.0,
+    "max_ms": 19313.3
+  },
+  "wall": {
+    "mean_ms": 13915.8,
+    "median_ms": 12954.7,
+    "p95_ms": 19883.3,
+    "min_ms": 9669.4,
+    "max_ms": 19883.3
+  },
+  "environment": {
+    "platform": "Windows-10-10.0.26200-SP0",
+    "processor": "Intel64 Family 6 Model 154 Stepping 4, GenuineIntel",
+    "python": "3.11.15",
+    "httpx": "0.28.1"
+  }
+}

@@ -1,0 +1,117 @@
+{
+  "scope": "model forward pass only; excludes decode, gate, drawing and PNG writes",
+  "tta": "none",
+  "n_images": 5,
+  "repeats_per_image": 3,
+  "threads": 10,
+  "per_image": [
+    {
+      "image": "sample_01_val_1_input.png",
+      "size": [
+        1976,
+        976
+      ],
+      "plain_pass": [
+        14045.7,
+        12074.0,
+        8259.1
+      ],
+      "mean_plain_pass": 11459.6,
+      "ms": [
+        14045.7,
+        12074.0,
+        8259.1
+      ],
+      "mean_ms": 11459.6
+    },
+    {
+      "image": "sample_02_val_10_input.png",
+      "size": [
+        2874,
+        1316
+      ],
+      "plain_pass": [
+        7065.8,
+        7524.1,
+        9135.0
+      ],
+      "mean_plain_pass": 7908.3,
+      "ms": [
+        7065.8,
+        7524.1,
+        9135.0
+      ],
+      "mean_ms": 7908.3
+    },
+    {
+      "image": "sample_03_val_11_input.png",
+      "size": [
+        2884,
+        1504
+      ],
+      "plain_pass": [
+        7821.2,
+        7961.8,
+        6814.1
+      ],
+      "mean_plain_pass": 7532.4,
+      "ms": [
+        7821.2,
+        7961.8,
+        6814.1
+      ],
+      "mean_ms": 7532.4
+    },
+    {
+      "image": "sample_04_val_14_input.png",
+      "size": [
+        2728,
+        1316
+      ],
+      "plain_pass": [
+        7259.1,
+        6811.9,
+        7056.9
+      ],
+      "mean_plain_pass": 7042.7,
+      "ms": [
+        7259.1,
+        6811.9,
+        7056.9
+      ],
+      "mean_ms": 7042.7
+    },
+    {
+      "image": "sample_05_val_21_input.png",
+      "size": [
+        2860,
+        1316
+      ],
+      "plain_pass": [
+        7937.6,
+        7584.0,
+        7055.4
+      ],
+      "mean_plain_pass": 7525.7,
+      "ms": [
+        7937.6,
+        7584.0,
+        7055.4
+      ],
+      "mean_ms": 7525.7
+    }
+  ],
+  "environment": {
+    "platform": "Windows-10-10.0.26200-SP0",
+    "processor": "Intel64 Family 6 Model 154 Stepping 4, GenuineIntel",
+    "python": "3.11.15",
+    "torch": "2.14.1+cpu",
+    "weights": "checkpoints\\best_model.pth",
+    "weights_sha256": "e0b49b12f48fc71ec1f583db08f107650659571e7c2b9cbd454dbfed13b46a1f"
+  },
+  "mean_ms": 8293.7,
+  "median_ms": 7584.0,
+  "p95_ms": 14045.7,
+  "min_ms": 6811.9,
+  "max_ms": 14045.7
+}
