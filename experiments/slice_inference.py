@@ -13,7 +13,7 @@ This script only writes COCO prediction dumps, one file per view group:
     <out>/predictions_<split>_tiles.json   overlapping native-scale tiles
     <out>/slice_meta_<split>.json          tile grid, timings, device
 
-Fuse / score them with `ensemble_wbf.py` so that the operating threshold is
+Fuse / score them with `experiments/ensemble_wbf.py` so that the operating threshold is
 still selected on the validation split only.
 
 Sliced inference is reported in the literature to help small objects (SAHI,
@@ -22,13 +22,14 @@ VisDrone/xView with FCOS/VFNet/TOOD). Whether it helps here is NOT known until
 the evaluation is run; this script makes no accuracy claim.
 
 Usage:
-    python slice_inference.py --weights checkpoints/best_model.pth \
+    python experiments/slice_inference.py --weights checkpoints/best_model.pth \
         --config configs/baseline.yaml --split val \
         --data_dir data/dentex --output_dir preds_slice --views both
 """
 
 import argparse
 import json
+import sys
 import time
 from pathlib import Path
 from typing import Callable, Dict, List, Sequence, Tuple
@@ -39,6 +40,7 @@ import yaml
 from PIL import Image
 from torchvision import transforms
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from evaluate import _flip_xyxy, _nms_per_class, _write_predictions
 from model import build_model_from_config, load_model_weights
 

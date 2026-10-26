@@ -11,7 +11,7 @@ DETDet (Choi et al.) to combine heterogeneous detectors; here it combines
 Faster R-CNN and RetinaNet, both BSD-3-Clause torchvision models.
 
 Usage:
-    python ensemble_wbf.py \
+    python experiments/ensemble_wbf.py \
         --gt data/dentex/annotations/instances_test.json \
         --images_dir data/dentex/images/test \
         --preds preds_frcnn/predictions_test.json preds_retinanet/predictions_test.json \
@@ -25,12 +25,14 @@ threshold is selected on the validation split.
 
 import argparse
 import json
+import sys
 from collections import defaultdict
 from pathlib import Path
 from typing import Any, Dict, List, Sequence, Tuple
 
 import numpy as np
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from evaluate import (
     evaluate_threshold_metrics,
     extract_failure_cases,

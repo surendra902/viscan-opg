@@ -24,9 +24,9 @@ Score composition at apply time (documented, not tuned on test):
 License: ConvNeXt-Tiny code/weights are BSD-3-Clause (torchvision).
 
 Usage:
-    python cascade_refine.py build --data_dir data/dentex --output_dir checkpoints/cascade
-    python cascade_refine.py train --bank_dir checkpoints/cascade --output checkpoints/cascade/convnext_cascade.pth
-    python cascade_refine.py apply --checkpoint checkpoints/cascade/convnext_cascade.pth \
+    python experiments/cascade_refine.py build --data_dir data/dentex --output_dir checkpoints/cascade
+    python experiments/cascade_refine.py train --bank_dir checkpoints/cascade --output checkpoints/cascade/convnext_cascade.pth
+    python experiments/cascade_refine.py apply --checkpoint checkpoints/cascade/convnext_cascade.pth \
         --preds preds_slice/predictions_val_tiles.json --split val --data_dir data/dentex \
         --mode rescore --output_dir preds_cascade
 """
