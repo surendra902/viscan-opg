@@ -274,8 +274,6 @@ Nine of every ten false alarms are caries, and seven of every ten swaps collapse
 | No class balancing, one global threshold | Not done in any run | Rare classes are penalised twice |
 | 2D projection overlap | Not measured | Overlapping anatomy is confounded with lesions and cannot be separated in 2D |
 | No tooth numbers | `tooth_fdi` is always `null` | Findings cannot be keyed to a specific tooth |
-| Small test set | 50 images, 9 periapical boxes, no patient IDs | Per-class numbers are noisy and patient overlap between splits cannot be ruled out |
-| Rule-based input check | No learned classifier | May reject unusual but valid X-rays |
 | One dataset | DENTEX only | Performance on other clinics' scanners is unknown |
 
 The first four need new training. The rest need new data, a new model, or a product decision — none of them is fixed by tuning the demo.
