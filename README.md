@@ -69,7 +69,7 @@ The live demo runs this same FastAPI app on a free CPU server. On that server th
 
 On 50 X-rays that the model never saw during training or tuning (182 labelled findings) it reaches **mAP@50 0.496** and **mAP@50:95 0.329**. The app defaults to a confidence of 0.70, chosen on a separate 70-image validation set; at that setting the average F1 across the four classes is 0.402 on test.
 
-Impacted teeth are usable (F1 0.81). Caries, deep caries and periapical lesions are weak (F1 0.37, 0.26 and 0.17), so treat the output as a highlighter, not a filter. Speed on this laptop: a model pass averages 9.3 s limited to two threads or 5.8 s with all ten cores, over 10 held-out images; a full request over the bundled samples takes 8.3–9.4 s, because it also decodes the file, draws the boxes and writes two PNGs. The 4.6 s figure from earlier drafts was the model alone on one image, with all cores.
+Impacted teeth are usable (F1 0.81). Caries, deep caries and periapical lesions are weak (F1 0.37, 0.26 and 0.17), so treat the output as a highlighter, not a filter. Speed on this laptop: a model pass averages 9.3 s limited to two threads or 5.8 s on all ten cores over 10 held-out images; full requests over the bundled samples take 4.1–6.6 s. Single-image timings vary by about ±25%, so those ranges overlap. Earlier figures of 4.6 s and 8.3 s were the model alone on one image and one recorded request respectively; re-sending that sample today took 4.1 s.
 
 Per-class scores, the confusion matrix, five failure cases, training curves, the model-versus-model comparison and every caveat are in [REPORT.md](REPORT.md), Sections 5 and 6.
 
@@ -182,7 +182,7 @@ curl -X POST "http://localhost:8000/analyze?confidence_threshold=0.70" \
      -F "file=@sample_opg.png"
 ```
 
-**Example response** (shortened to 2 of 8 findings; recorded on CPU from `samples/sample_01_val_1_report.json`. `inference_ms` here is the whole request — file decode, input gate, model, annotation drawing and two PNG writes — so it is larger than the model-only figure in Section 2):
+**Example response** (shortened to 2 of 8 findings; recorded on CPU from `samples/sample_01_val_1_report.json`. `inference_ms` here is the whole request — file decode, input gate, model, annotation drawing and two PNG writes — and it is one recorded run; Section 2 gives the measured ranges):
 
 ```json
 {
