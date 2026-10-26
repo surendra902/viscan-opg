@@ -12,6 +12,10 @@ Features:
 import os
 import io
 import json
+import hashlib
+import http.client
+import urllib.error
+import urllib.request
 from pathlib import Path
 from typing import Optional
 
@@ -69,15 +73,65 @@ if _CONFIG_PATH.is_file():
         _config = yaml.safe_load(_fh)
 
 weights_file = os.getenv("VISCAN_WEIGHTS_PATH", "checkpoints/best_model.pth")
-service = DentalAnalysisService(
-    weights_path=weights_file if os.path.exists(weights_file) else None,
-    config=_config,
-    device=os.getenv("VISCAN_DEVICE") or None,
-    results_dir=str(RESULTS_DIR),
-    confidence_threshold=float(
-        (_config or {}).get("evaluation", {}).get("ui_confidence_threshold", 0.70)
-    ),
-)
+
+# Published weights, used only when the local checkpoint is absent. The hash matches
+# README Section 4 and REPORT.md; a mismatch discards the download.
+WEIGHTS_URL = "https://huggingface.co/surendra08/viscan-opg-weights/resolve/main/best_model.pth"
+WEIGHTS_SHA256 = "e0b49b12f48fc71ec1f583db08f107650659571e7c2b9cbd454dbfed13b46a1f"
+
+
+def _auto_download_enabled() -> bool:
+    return os.getenv("VISCAN_AUTO_DOWNLOAD", "1").strip().lower() not in {"0", "false", "no"}
+
+
+def _ensure_weights(path: str) -> bool:
+    """Fetches the checkpoint on first run. Returns False and leaves the model unloaded on failure."""
+    if os.path.exists(path):
+        return True
+    if not _auto_download_enabled():
+        print(f"[viscan] {path} is missing and VISCAN_AUTO_DOWNLOAD is off; starting without the 2D model.")
+        return False
+
+    dest = Path(path)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    part = dest.with_name(dest.name + ".part")
+    print(f"[viscan] {path} is missing; downloading 173 MB from {WEIGHTS_URL}")
+    digest = hashlib.sha256()
+    try:
+        request = urllib.request.Request(WEIGHTS_URL, headers={"User-Agent": "viscan-opg/1.0"})
+        with urllib.request.urlopen(request, timeout=60) as response, open(part, "wb") as handle:
+            for chunk in iter(lambda: response.read(1024 * 1024), b""):
+                handle.write(chunk)
+                digest.update(chunk)
+    except (urllib.error.URLError, http.client.HTTPException, OSError) as exc:
+        part.unlink(missing_ok=True)
+        print(f"[viscan] download failed: {exc}. Place the file at {path} manually (README Section 4).")
+        return False
+
+    actual = digest.hexdigest()
+    if actual != WEIGHTS_SHA256:
+        part.unlink(missing_ok=True)
+        print(f"[viscan] checksum mismatch (expected {WEIGHTS_SHA256}, got {actual}); discarded the download.")
+        return False
+
+    os.replace(part, dest)
+    print(f"[viscan] saved and verified {dest} ({dest.stat().st_size} bytes)")
+    return True
+
+
+def _create_service() -> DentalAnalysisService:
+    return DentalAnalysisService(
+        weights_path=weights_file if os.path.exists(weights_file) else None,
+        config=_config,
+        device=os.getenv("VISCAN_DEVICE") or None,
+        results_dir=str(RESULTS_DIR),
+        confidence_threshold=float(
+            (_config or {}).get("evaluation", {}).get("ui_confidence_threshold", 0.70)
+        ),
+    )
+
+
+service = _create_service()
 
 
 @app.get("/health")
@@ -698,4 +752,7 @@ def index_page():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=False)
+
+    if service.model is None and _ensure_weights(weights_file):
+        service = _create_service()
+    uvicorn.run(app, host="0.0.0.0", port=8000, reload=False)

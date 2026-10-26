@@ -93,18 +93,13 @@ source venv/bin/activate          # Windows: .\venv\Scripts\activate
 # 3. Install dependencies
 pip install -r requirements.txt
 
-# 4. Download the model weights (about 173 MB)
-mkdir checkpoints
-curl -L -o checkpoints/best_model.pth \
-  "https://huggingface.co/surendra08/viscan-opg-weights/resolve/main/best_model.pth"
-# Windows PowerShell:
-# Invoke-WebRequest -Uri "https://huggingface.co/surendra08/viscan-opg-weights/resolve/main/best_model.pth" -OutFile "checkpoints\best_model.pth"
-
-# 5. Start the app
+# 4. Start the app (the first run fetches the checkpoint)
 python app.py
 ```
 
 Open **http://localhost:8000** in your browser.
+
+The first start downloads `best_model.pth` (173 MB) from the weights repository and checks it against the SHA-256 in Section 4 before loading it. That happens once. To skip the download, set `VISCAN_AUTO_DOWNLOAD=0` and place the file at `checkpoints/best_model.pth` yourself. If the download fails, the app still starts, `/health` reports `model_loaded: false`, and `/analyze` returns 503.
 
 ### Option B: Docker
 
@@ -162,6 +157,8 @@ curl http://localhost:8000/health
 |---|---|---|---|---|
 | `best_model.pth` (2D OPG detector, Faster R-CNN) | 173,466,789 bytes (173.5 MB) | SHA-256 `e0b49b12f48fc71ec1f583db08f107650659571e7c2b9cbd454dbfed13b46a1f` | [Hugging Face](https://huggingface.co/surendra08/viscan-opg-weights) / [direct link](https://huggingface.co/surendra08/viscan-opg-weights/resolve/main/best_model.pth) | CC BY-NC-SA 4.0 |
 | `Dataset112_DentalSegmentator_v100.zip` (3D CBCT model, used as-is) | 229,747,861 bytes (219.1 MB) | MD5 `b71cd5230168d28a4f71b078265b76be` | [Zenodo 10.5281/zenodo.10829675](https://zenodo.org/records/10829675) | CC BY 4.0 |
+
+`python app.py` fetches the 2D checkpoint on first run and verifies the SHA-256 above before loading it. The commands below are for manual or air-gapped installs.
 
 **Verify your download:**
 
