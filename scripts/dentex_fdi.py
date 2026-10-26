@@ -169,22 +169,44 @@ def records(data: Dict[str, Any], allowed_ids: Optional[set] = None) -> List[Dic
     return out
 
 
-def score(table: Dict[str, Any], rows: Sequence[Dict[str, Any]]) -> Dict[str, float]:
+def score(table: Dict[str, Any], rows: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
+    """Agree/miss rates for the table on rows that carry a true quadrant and tooth digit.
+
+    A miss is counted once, as either the right quadrant and the wrong tooth digit or
+    the wrong quadrant, so the two error columns sum with the exact hits to n_assigned.
+    """
     quadrants = teeth = exact = assigned = 0
+    near = far = wrong_quadrant = 0
     for row in rows:
         guess = fdi.assign_fdi(row["u"], row["v"], table)
         if guess is None:
             continue
         assigned += 1
-        quadrants += guess["quadrant"] == row["quadrant"]
-        teeth += guess["tooth"] == row["tooth"]
-        exact += guess["fdi"] == row["quadrant"] * 10 + row["tooth"]
+        right_quadrant = guess["quadrant"] == row["quadrant"]
+        right_tooth = guess["tooth"] == row["tooth"]
+        quadrants += right_quadrant
+        teeth += right_tooth
+        exact += right_quadrant and right_tooth
+        if not (right_quadrant and right_tooth):
+            if not right_quadrant:
+                wrong_quadrant += 1
+            elif abs(guess["tooth"] - row["tooth"]) == 1:
+                near += 1
+            else:
+                far += 1
     n = max(assigned, 1)
     return {
         "n_assigned": assigned,
         "quadrant_accuracy": round(quadrants / n, 4),
         "tooth_accuracy": round(teeth / n, 4),
         "fdi_accuracy": round(exact / n, 4),
+        "within_one_position_accuracy": round((exact + near) / n, 4),
+        "error_breakdown": {
+            "n_wrong": assigned - exact,
+            "off_by_one_tooth_same_quadrant": near,
+            "off_by_two_or_more_same_quadrant": far,
+            "wrong_quadrant": wrong_quadrant,
+        },
     }
 
 
@@ -246,10 +268,15 @@ def cmd_fit(args: argparse.Namespace) -> None:
         "fit_rule": "same split as prepare_data.py",
     }
     fdi.save_table(table, Path(args.output))
+    errors = val_scores["error_breakdown"]
     print(
         f"fitted on {len(train_rows):,} train boxes; v_weight {best_weight}; "
-        f"val FDI {val_scores['fdi_accuracy']:.3f}, quadrant {val_scores['quadrant_accuracy']:.3f}, "
-        f"tooth {val_scores['tooth_accuracy']:.3f} -> {args.output}"
+        f"val FDI {val_scores['fdi_accuracy']:.4f}, quadrant {val_scores['quadrant_accuracy']:.4f}, "
+        f"tooth {val_scores['tooth_accuracy']:.4f}, "
+        f"quadrant-and-within-one {val_scores['within_one_position_accuracy']:.4f} "
+        f"(of {errors['n_wrong']} misses: {errors['off_by_one_tooth_same_quadrant']} one tooth over, "
+        f"{errors['off_by_two_or_more_same_quadrant']} two or more, "
+        f"{errors['wrong_quadrant']} wrong quadrant) -> {args.output}"
     )
     if args.write_eval:
         out = Path(args.write_eval)

@@ -4,12 +4,16 @@ Chrome lays the document out; PyMuPDF reads the result back and prints where the
 content of each page ends, so a change that pushes the report onto a fifth page
 fails visibly instead of shipping quietly.
 
+Images are rewritten to absolute file URIs before printing, because the HTML is
+written to a temporary directory and a relative src would render as a broken box.
+
 Usage:
     python scripts/render_report_pdf.py                 # writes REPORT.pdf
     python scripts/render_report_pdf.py --output /tmp/report.pdf
 """
 
 import argparse
+import re
 import subprocess
 import sys
 import tempfile
@@ -21,20 +25,35 @@ ROOT = Path(__file__).resolve().parents[1]
 MAX_PAGES = 4
 
 CSS = """
-@page { size: A4; margin: 15mm 14mm; }
-body { font-family: "Segoe UI", Arial, sans-serif; font-size: 10pt; line-height: 1.26; color: #111; }
-h1 { font-size: 18pt; margin: 0 0 4pt; }
-h2 { font-size: 12.5pt; margin: 10pt 0 4pt; border-bottom: 1px solid #ccc; }
-h3 { font-size: 11pt; margin: 9pt 0 3pt; }
-p { margin: 0 0 4pt; }
-table { border-collapse: collapse; width: 100%; font-size: 8.5pt; margin: 3pt 0 5pt; }
-th, td { border: 1px solid #bbb; padding: 2pt 4pt; text-align: left; }
+@page { size: A4; margin: 11mm 11mm; }
+body { font-family: "Segoe UI", Arial, sans-serif; font-size: 9pt; line-height: 1.18; color: #111; }
+h1 { font-size: 15pt; margin: 0 0 2pt; }
+h2 { font-size: 11pt; margin: 4pt 0 1.5pt; border-bottom: 1px solid #ccc; break-after: avoid; }
+h3 { font-size: 9.5pt; margin: 6pt 0 2pt; }
+p { margin: 0 0 1.5pt; }
+p > em { font-size: 8.2pt; line-height: 1.15; color: #333; }
+table { border-collapse: collapse; width: 100%; font-size: 7.6pt; margin: 1.5pt 0 2.5pt; }
+th, td { border: 1px solid #bbb; padding: 1.2pt 3pt; text-align: left; }
 th { background: #f0f0f0; }
-code { font-family: Consolas, monospace; font-size: 9pt; }
-pre { background: #f6f6f6; padding: 5pt; font-size: 9pt; }
-blockquote { margin: 4pt 0 6pt; padding: 4pt 8pt; background: #fff8e1; border-left: 3px solid #f0b400; }
-ul, ol { margin: 2pt 0 5pt 16pt; padding: 0; }
+code { font-family: Consolas, monospace; font-size: 8pt; }
+pre { background: #f6f6f6; padding: 3.5pt; font-size: 8pt; line-height: 1.18; }
+blockquote { margin: 2.5pt 0 4pt; padding: 2.5pt 6pt; background: #fff8e1; border-left: 3px solid #f0b400; }
+ul, ol { margin: 1.5pt 0 3pt 14pt; padding: 0; }
+img { max-width: 100%; height: auto; display: block; margin: 2pt auto 1pt; }
 """
+
+
+def absolutise_images(body: str) -> str:
+    """Point every relative img src at the file on disk so Chrome can load it from a temp page."""
+
+    def replace(match: re.Match) -> str:
+        src = match.group(2)
+        if src.startswith(("http://", "https://", "data:", "file:")):
+            return match.group(0)
+        return f'{match.group(1)}src="{(ROOT / src).resolve().as_uri()}"'
+
+    return re.sub(r'(<img [^>]*?)src="([^"]+)"', replace, body)
+
 
 
 def chrome_html() -> str:
@@ -57,6 +76,16 @@ def main() -> int:
     source = args.source.resolve()
     text = source.read_text(encoding="utf-8")
     body = markdown.markdown(text, extensions=["tables", "fenced_code", "sane_lists"])
+    sources = re.findall(r'<img [^>]*?src="([^"]+)"', body)
+    missing = [
+        src
+        for src in sources
+        if not src.startswith(("http://", "https://", "data:", "file:")) and not (ROOT / src).is_file()
+    ]
+    if missing:
+        print(f"FAIL: the report links images that are not on disk: {missing}")
+        return 1
+    body = absolutise_images(body)
     page = f"""<!doctype html><html><head><meta charset="utf-8"><style>{CSS}</style>
 </head><body>{body}</body></html>"""
 

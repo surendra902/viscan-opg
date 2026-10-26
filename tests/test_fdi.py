@@ -138,3 +138,24 @@ def test_shipped_table_is_fitted_on_train_and_measured_on_validation():
     assert 0.0 <= shipped["validation"]["fdi_accuracy"] <= 1.0
     guess = fdi.assign_fdi(0.25, 0.35, shipped)
     assert guess is None or 11 <= guess["fdi"] <= 48
+
+
+@pytest.mark.skipif(not fdi.TABLE_PATH.is_file(), reason="run scripts/dentex_fdi.py fit")
+def test_shipped_validation_stats_add_up():
+    """The report quotes within-one-position accuracy and a miss breakdown; both must follow from n_assigned."""
+    val = fdi.load_table()["validation"]
+    err = val["error_breakdown"]
+    n = val["n_assigned"]
+    exact = round(val["fdi_accuracy"] * n)
+    assert err["n_wrong"] == n - exact
+    assert err["off_by_one_tooth_same_quadrant"] + err["off_by_two_or_more_same_quadrant"] + err["wrong_quadrant"] == err["n_wrong"]
+    assert round(val["within_one_position_accuracy"] * n) == exact + err["off_by_one_tooth_same_quadrant"]
+
+
+@pytest.mark.skipif(not fdi.TABLE_PATH.is_file(), reason="run scripts/dentex_fdi.py fit")
+def test_eval_artifact_matches_the_table_it_was_measured_with():
+    eval_path = Path(fdi.TABLE_PATH).parents[2] / "assets" / "eval" / "fdi_geometry.json"
+    if not eval_path.is_file():
+        pytest.skip("run scripts/dentex_fdi.py fit")
+    measured = json.loads(eval_path.read_text(encoding="utf-8"))["validation"]
+    assert measured == fdi.load_table()["validation"]

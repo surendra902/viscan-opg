@@ -1,0 +1,699 @@
+{
+  "image": "samples\\sample_02_val_10_input.png",
+  "image_size": [
+    2874,
+    1316
+  ],
+  "weights": "checkpoints/best_model.pth",
+  "threads": 4,
+  "note": "Panels share checkpoints/best_model.pth and the app's own drawing code; only the named setting differs. pass_ms_cpu is a timed wall on this machine while other work ran, so compare the four numbers with each other, not with an unloaded session.",
+  "panels": [
+    {
+      "panel": "Shipped: floor 0.70, one pass",
+      "input": "min 800 / max 1333",
+      "score_floor": 0.7,
+      "tta": "none",
+      "config": "baseline.yaml",
+      "n_findings": 12,
+      "per_class": {
+        "caries": 10,
+        "deep_caries": 2
+      },
+      "pass_ms_cpu": 11774.0,
+      "findings": [
+        {
+          "class": "caries",
+          "confidence": 0.98,
+          "tooth_fdi": 24,
+          "bbox": [
+            1686.7,
+            477.9,
+            1797.5,
+            762.1
+          ]
+        },
+        {
+          "class": "caries",
+          "confidence": 0.97,
+          "tooth_fdi": 45,
+          "bbox": [
+            1032.2,
+            781.7,
+            1138.5,
+            1065.8
+          ]
+        },
+        {
+          "class": "caries",
+          "confidence": 0.96,
+          "tooth_fdi": 38,
+          "bbox": [
+            2000.4,
+            715.6,
+            2244.9,
+            944.7
+          ]
+        },
+        {
+          "class": "caries",
+          "confidence": 0.96,
+          "tooth_fdi": 25,
+          "bbox": [
+            1775.6,
+            498.9,
+            1911.1,
+            757.0
+          ]
+        },
+        {
+          "class": "deep_caries",
+          "confidence": 0.95,
+          "tooth_fdi": 36,
+          "bbox": [
+            1746.1,
+            760.3,
+            1968.5,
+            1057.9
+          ]
+        },
+        {
+          "class": "caries",
+          "confidence": 0.95,
+          "tooth_fdi": 35,
+          "bbox": [
+            1669.4,
+            795.1,
+            1841.8,
+            1081.9
+          ]
+        },
+        {
+          "class": "deep_caries",
+          "confidence": 0.89,
+          "tooth_fdi": 16,
+          "bbox": [
+            955.0,
+            473.6,
+            1069.3,
+            762.3
+          ]
+        },
+        {
+          "class": "caries",
+          "confidence": 0.87,
+          "tooth_fdi": 18,
+          "bbox": [
+            749.2,
+            455.9,
+            885.7,
+            710.3
+          ]
+        },
+        {
+          "class": "caries",
+          "confidence": 0.84,
+          "tooth_fdi": 17,
+          "bbox": [
+            846.6,
+            483.4,
+            984.7,
+            746.4
+          ]
+        },
+        {
+          "class": "caries",
+          "confidence": 0.8,
+          "tooth_fdi": 47,
+          "bbox": [
+            685.0,
+            734.4,
+            967.1,
+            973.3
+          ]
+        },
+        {
+          "class": "caries",
+          "confidence": 0.79,
+          "tooth_fdi": 46,
+          "bbox": [
+            854.4,
+            756.8,
+            1069.3,
+            1069.9
+          ]
+        },
+        {
+          "class": "caries",
+          "confidence": 0.76,
+          "tooth_fdi": 23,
+          "bbox": [
+            1613.6,
+            447.2,
+            1737.0,
+            765.3
+          ]
+        }
+      ]
+    },
+    {
+      "panel": "Same weights, floor 0.30",
+      "input": "min 800 / max 1333",
+      "score_floor": 0.3,
+      "tta": "none",
+      "config": "baseline.yaml",
+      "n_findings": 18,
+      "per_class": {
+        "caries": 15,
+        "deep_caries": 3
+      },
+      "pass_ms_cpu": 11865.6,
+      "findings": [
+        {
+          "class": "caries",
+          "confidence": 0.98,
+          "tooth_fdi": 24,
+          "bbox": [
+            1686.7,
+            477.9,
+            1797.5,
+            762.1
+          ]
+        },
+        {
+          "class": "caries",
+          "confidence": 0.97,
+          "tooth_fdi": 45,
+          "bbox": [
+            1032.2,
+            781.7,
+            1138.5,
+            1065.8
+          ]
+        },
+        {
+          "class": "caries",
+          "confidence": 0.96,
+          "tooth_fdi": 38,
+          "bbox": [
+            2000.4,
+            715.6,
+            2244.9,
+            944.7
+          ]
+        },
+        {
+          "class": "caries",
+          "confidence": 0.96,
+          "tooth_fdi": 25,
+          "bbox": [
+            1775.6,
+            498.9,
+            1911.1,
+            757.0
+          ]
+        },
+        {
+          "class": "deep_caries",
+          "confidence": 0.95,
+          "tooth_fdi": 36,
+          "bbox": [
+            1746.1,
+            760.3,
+            1968.5,
+            1057.9
+          ]
+        },
+        {
+          "class": "caries",
+          "confidence": 0.95,
+          "tooth_fdi": 35,
+          "bbox": [
+            1669.4,
+            795.1,
+            1841.8,
+            1081.9
+          ]
+        },
+        {
+          "class": "deep_caries",
+          "confidence": 0.89,
+          "tooth_fdi": 16,
+          "bbox": [
+            955.0,
+            473.6,
+            1069.3,
+            762.3
+          ]
+        },
+        {
+          "class": "caries",
+          "confidence": 0.87,
+          "tooth_fdi": 18,
+          "bbox": [
+            749.2,
+            455.9,
+            885.7,
+            710.3
+          ]
+        },
+        {
+          "class": "caries",
+          "confidence": 0.84,
+          "tooth_fdi": 17,
+          "bbox": [
+            846.6,
+            483.4,
+            984.7,
+            746.4
+          ]
+        },
+        {
+          "class": "caries",
+          "confidence": 0.8,
+          "tooth_fdi": 47,
+          "bbox": [
+            685.0,
+            734.4,
+            967.1,
+            973.3
+          ]
+        },
+        {
+          "class": "caries",
+          "confidence": 0.79,
+          "tooth_fdi": 46,
+          "bbox": [
+            854.4,
+            756.8,
+            1069.3,
+            1069.9
+          ]
+        },
+        {
+          "class": "caries",
+          "confidence": 0.76,
+          "tooth_fdi": 23,
+          "bbox": [
+            1613.6,
+            447.2,
+            1737.0,
+            765.3
+          ]
+        },
+        {
+          "class": "caries",
+          "confidence": 0.69,
+          "tooth_fdi": 37,
+          "bbox": [
+            1877.6,
+            759.3,
+            2103.9,
+            1044.7
+          ]
+        },
+        {
+          "class": "deep_caries",
+          "confidence": 0.68,
+          "tooth_fdi": 23,
+          "bbox": [
+            1613.7,
+            444.7,
+            1736.0,
+            775.9
+          ]
+        },
+        {
+          "class": "caries",
+          "confidence": 0.55,
+          "tooth_fdi": 37,
+          "bbox": [
+            1933.5,
+            735.0,
+            2167.5,
+            991.4
+          ]
+        },
+        {
+          "class": "caries",
+          "confidence": 0.44,
+          "tooth_fdi": 28,
+          "bbox": [
+            1995.9,
+            463.2,
+            2151.0,
+            705.9
+          ]
+        },
+        {
+          "class": "caries",
+          "confidence": 0.33,
+          "tooth_fdi": 44,
+          "bbox": [
+            1118.4,
+            785.7,
+            1214.2,
+            1094.9
+          ]
+        },
+        {
+          "class": "caries",
+          "confidence": 0.32,
+          "tooth_fdi": 36,
+          "bbox": [
+            1767.7,
+            760.5,
+            1994.1,
+            1048.7
+          ]
+        }
+      ]
+    },
+    {
+      "panel": "Shipped floor + hflip TTA",
+      "input": "min 800 / max 1333",
+      "score_floor": 0.7,
+      "tta": "hflip",
+      "config": "baseline.yaml",
+      "n_findings": 14,
+      "per_class": {
+        "caries": 11,
+        "deep_caries": 3
+      },
+      "pass_ms_cpu": 19319.9,
+      "findings": [
+        {
+          "class": "caries",
+          "confidence": 0.98,
+          "tooth_fdi": 24,
+          "bbox": [
+            1684.3,
+            464.2,
+            1796.9,
+            766.0
+          ]
+        },
+        {
+          "class": "caries",
+          "confidence": 0.98,
+          "tooth_fdi": 45,
+          "bbox": [
+            1034.1,
+            782.8,
+            1135.9,
+            1057.0
+          ]
+        },
+        {
+          "class": "caries",
+          "confidence": 0.97,
+          "tooth_fdi": 35,
+          "bbox": [
+            1668.5,
+            789.2,
+            1836.6,
+            1073.3
+          ]
+        },
+        {
+          "class": "caries",
+          "confidence": 0.97,
+          "tooth_fdi": 38,
+          "bbox": [
+            2003.6,
+            711.5,
+            2241.3,
+            947.0
+          ]
+        },
+        {
+          "class": "caries",
+          "confidence": 0.96,
+          "tooth_fdi": 25,
+          "bbox": [
+            1775.6,
+            498.9,
+            1911.1,
+            757.0
+          ]
+        },
+        {
+          "class": "deep_caries",
+          "confidence": 0.95,
+          "tooth_fdi": 36,
+          "bbox": [
+            1746.1,
+            760.3,
+            1968.5,
+            1057.9
+          ]
+        },
+        {
+          "class": "deep_caries",
+          "confidence": 0.91,
+          "tooth_fdi": 16,
+          "bbox": [
+            955.9,
+            469.1,
+            1074.4,
+            761.1
+          ]
+        },
+        {
+          "class": "caries",
+          "confidence": 0.87,
+          "tooth_fdi": 18,
+          "bbox": [
+            749.2,
+            455.9,
+            885.7,
+            710.3
+          ]
+        },
+        {
+          "class": "caries",
+          "confidence": 0.87,
+          "tooth_fdi": 28,
+          "bbox": [
+            2003.8,
+            434.4,
+            2153.9,
+            717.6
+          ]
+        },
+        {
+          "class": "caries",
+          "confidence": 0.84,
+          "tooth_fdi": 17,
+          "bbox": [
+            846.6,
+            483.4,
+            984.7,
+            746.4
+          ]
+        },
+        {
+          "class": "caries",
+          "confidence": 0.83,
+          "tooth_fdi": 46,
+          "bbox": [
+            839.3,
+            764.5,
+            1069.1,
+            1070.6
+          ]
+        },
+        {
+          "class": "caries",
+          "confidence": 0.8,
+          "tooth_fdi": 47,
+          "bbox": [
+            685.0,
+            734.4,
+            967.1,
+            973.3
+          ]
+        },
+        {
+          "class": "caries",
+          "confidence": 0.76,
+          "tooth_fdi": 23,
+          "bbox": [
+            1613.6,
+            447.2,
+            1737.0,
+            765.3
+          ]
+        },
+        {
+          "class": "deep_caries",
+          "confidence": 0.72,
+          "tooth_fdi": 23,
+          "bbox": [
+            1620.3,
+            439.2,
+            1732.0,
+            771.0
+          ]
+        }
+      ]
+    },
+    {
+      "panel": "Same weights, larger input",
+      "input": "min 960 / max 1600",
+      "score_floor": 0.7,
+      "tta": "none",
+      "config": "inference_variant.yaml",
+      "n_findings": 13,
+      "per_class": {
+        "caries": 9,
+        "deep_caries": 4
+      },
+      "pass_ms_cpu": 13103.8,
+      "findings": [
+        {
+          "class": "caries",
+          "confidence": 0.99,
+          "tooth_fdi": 24,
+          "bbox": [
+            1687.0,
+            481.2,
+            1796.8,
+            761.5
+          ]
+        },
+        {
+          "class": "caries",
+          "confidence": 0.98,
+          "tooth_fdi": 45,
+          "bbox": [
+            1034.1,
+            788.1,
+            1133.7,
+            1056.7
+          ]
+        },
+        {
+          "class": "deep_caries",
+          "confidence": 0.98,
+          "tooth_fdi": 16,
+          "bbox": [
+            954.1,
+            464.7,
+            1069.5,
+            771.4
+          ]
+        },
+        {
+          "class": "caries",
+          "confidence": 0.96,
+          "tooth_fdi": 35,
+          "bbox": [
+            1667.8,
+            792.1,
+            1835.1,
+            1071.1
+          ]
+        },
+        {
+          "class": "caries",
+          "confidence": 0.95,
+          "tooth_fdi": 25,
+          "bbox": [
+            1773.8,
+            498.1,
+            1918.4,
+            754.9
+          ]
+        },
+        {
+          "class": "caries",
+          "confidence": 0.93,
+          "tooth_fdi": 38,
+          "bbox": [
+            2008.4,
+            711.0,
+            2235.3,
+            940.1
+          ]
+        },
+        {
+          "class": "caries",
+          "confidence": 0.89,
+          "tooth_fdi": 14,
+          "bbox": [
+            1126.1,
+            490.5,
+            1221.9,
+            761.6
+          ]
+        },
+        {
+          "class": "deep_caries",
+          "confidence": 0.87,
+          "tooth_fdi": 36,
+          "bbox": [
+            1744.5,
+            767.4,
+            1958.8,
+            1045.0
+          ]
+        },
+        {
+          "class": "caries",
+          "confidence": 0.86,
+          "tooth_fdi": 47,
+          "bbox": [
+            701.5,
+            731.4,
+            958.8,
+            961.8
+          ]
+        },
+        {
+          "class": "deep_caries",
+          "confidence": 0.78,
+          "tooth_fdi": 18,
+          "bbox": [
+            742.5,
+            466.0,
+            887.1,
+            713.5
+          ]
+        },
+        {
+          "class": "caries",
+          "confidence": 0.74,
+          "tooth_fdi": 36,
+          "bbox": [
+            1830.1,
+            763.0,
+            2046.7,
+            1037.3
+          ]
+        },
+        {
+          "class": "deep_caries",
+          "confidence": 0.73,
+          "tooth_fdi": 23,
+          "bbox": [
+            1616.0,
+            476.9,
+            1725.1,
+            769.5
+          ]
+        },
+        {
+          "class": "caries",
+          "confidence": 0.72,
+          "tooth_fdi": 44,
+          "bbox": [
+            1121.3,
+            790.3,
+            1209.3,
+            1070.8
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -12,17 +12,17 @@
         976
       ],
       "plain_pass": [
-        11292.5,
-        11789.0,
-        11394.2
+        12172.9,
+        12195.1,
+        13858.2
       ],
-      "mean_plain_pass": 11491.9,
+      "mean_plain_pass": 12742.1,
       "ms": [
-        11292.5,
-        11789.0,
-        11394.2
+        12172.9,
+        12195.1,
+        13858.2
       ],
-      "mean_ms": 11491.9
+      "mean_ms": 12742.1
     },
     {
       "image": "sample_02_val_10_input.png",
@@ -31,17 +31,17 @@
         1316
       ],
       "plain_pass": [
-        12584.7,
-        12318.8,
-        10974.1
+        11580.7,
+        12775.7,
+        11570.4
       ],
-      "mean_plain_pass": 11959.2,
+      "mean_plain_pass": 11975.6,
       "ms": [
-        12584.7,
-        12318.8,
-        10974.1
+        11580.7,
+        12775.7,
+        11570.4
       ],
-      "mean_ms": 11959.2
+      "mean_ms": 11975.6
     },
     {
       "image": "sample_03_val_11_input.png",
@@ -50,17 +50,17 @@
         1504
       ],
       "plain_pass": [
-        9993.6,
-        9699.8,
-        11285.4
+        13995.4,
+        12995.4,
+        22748.5
       ],
-      "mean_plain_pass": 10326.2,
+      "mean_plain_pass": 16579.8,
       "ms": [
-        9993.6,
-        9699.8,
-        11285.4
+        13995.4,
+        12995.4,
+        22748.5
       ],
-      "mean_ms": 10326.2
+      "mean_ms": 16579.8
     },
     {
       "image": "sample_04_val_14_input.png",
@@ -69,17 +69,17 @@
         1316
       ],
       "plain_pass": [
-        10541.9,
-        11553.9,
-        12281.5
+        23576.7,
+        25212.0,
+        20068.2
       ],
-      "mean_plain_pass": 11459.1,
+      "mean_plain_pass": 22952.3,
       "ms": [
-        10541.9,
-        11553.9,
-        12281.5
+        23576.7,
+        25212.0,
+        20068.2
       ],
-      "mean_ms": 11459.1
+      "mean_ms": 22952.3
     },
     {
       "image": "sample_05_val_21_input.png",
@@ -88,30 +88,42 @@
         1316
       ],
       "plain_pass": [
-        9318.8,
-        9277.0,
-        11544.8
+        12301.3,
+        9227.0,
+        9397.5
       ],
-      "mean_plain_pass": 10046.9,
+      "mean_plain_pass": 10308.6,
       "ms": [
-        9318.8,
-        9277.0,
-        11544.8
+        12301.3,
+        9227.0,
+        9397.5
       ],
-      "mean_ms": 10046.9
+      "mean_ms": 10308.6
     }
   ],
+  "memory_after_weight_load": {
+    "machine_total_ram_mb": 24261,
+    "rss_now_mb": 618.1
+  },
+  "memory": {
+    "memory_measured": true,
+    "rss_sampling_s": 0.25,
+    "n_rss_samples": 1275,
+    "peak_rss_mb": 1048.0,
+    "final_rss_mb": 880.8
+  },
   "environment": {
     "platform": "Windows-10-10.0.26200-SP0",
     "processor": "Intel64 Family 6 Model 154 Stepping 4, GenuineIntel",
     "python": "3.11.15",
     "torch": "2.14.1+cpu",
+    "psutil": "7.2.2",
     "weights": "checkpoints\\best_model.pth",
     "weights_sha256": "e0b49b12f48fc71ec1f583db08f107650659571e7c2b9cbd454dbfed13b46a1f"
   },
-  "mean_ms": 11056.7,
-  "median_ms": 11292.5,
-  "p95_ms": 12584.7,
-  "min_ms": 9277.0,
-  "max_ms": 12584.7
+  "mean_ms": 14911.7,
+  "median_ms": 12775.7,
+  "p95_ms": 25212.0,
+  "min_ms": 9227.0,
+  "max_ms": 25212.0
 }

@@ -9,62 +9,125 @@
         "n_assigned": 574,
         "quadrant_accuracy": 0.9739,
         "tooth_accuracy": 0.6028,
-        "fdi_accuracy": 0.5854
+        "fdi_accuracy": 0.5854,
+        "within_one_position_accuracy": 0.9233,
+        "error_breakdown": {
+          "n_wrong": 238,
+          "off_by_one_tooth_same_quadrant": 194,
+          "off_by_two_or_more_same_quadrant": 29,
+          "wrong_quadrant": 15
+        }
       },
       {
         "v_weight": 0.25,
         "n_assigned": 574,
         "quadrant_accuracy": 0.9739,
         "tooth_accuracy": 0.5941,
-        "fdi_accuracy": 0.5784
+        "fdi_accuracy": 0.5784,
+        "within_one_position_accuracy": 0.9268,
+        "error_breakdown": {
+          "n_wrong": 242,
+          "off_by_one_tooth_same_quadrant": 200,
+          "off_by_two_or_more_same_quadrant": 27,
+          "wrong_quadrant": 15
+        }
       },
       {
         "v_weight": 0.5,
         "n_assigned": 574,
         "quadrant_accuracy": 0.9739,
         "tooth_accuracy": 0.5836,
-        "fdi_accuracy": 0.5679
+        "fdi_accuracy": 0.5679,
+        "within_one_position_accuracy": 0.9286,
+        "error_breakdown": {
+          "n_wrong": 248,
+          "off_by_one_tooth_same_quadrant": 207,
+          "off_by_two_or_more_same_quadrant": 26,
+          "wrong_quadrant": 15
+        }
       },
       {
         "v_weight": 0.75,
         "n_assigned": 574,
         "quadrant_accuracy": 0.9739,
         "tooth_accuracy": 0.5645,
-        "fdi_accuracy": 0.5523
+        "fdi_accuracy": 0.5523,
+        "within_one_position_accuracy": 0.9199,
+        "error_breakdown": {
+          "n_wrong": 257,
+          "off_by_one_tooth_same_quadrant": 211,
+          "off_by_two_or_more_same_quadrant": 31,
+          "wrong_quadrant": 15
+        }
       },
       {
         "v_weight": 1.0,
         "n_assigned": 574,
         "quadrant_accuracy": 0.9739,
         "tooth_accuracy": 0.5453,
-        "fdi_accuracy": 0.5348
+        "fdi_accuracy": 0.5348,
+        "within_one_position_accuracy": 0.9094,
+        "error_breakdown": {
+          "n_wrong": 267,
+          "off_by_one_tooth_same_quadrant": 215,
+          "off_by_two_or_more_same_quadrant": 37,
+          "wrong_quadrant": 15
+        }
       },
       {
         "v_weight": 1.5,
         "n_assigned": 574,
         "quadrant_accuracy": 0.9739,
         "tooth_accuracy": 0.4791,
-        "fdi_accuracy": 0.4739
+        "fdi_accuracy": 0.4739,
+        "within_one_position_accuracy": 0.8676,
+        "error_breakdown": {
+          "n_wrong": 302,
+          "off_by_one_tooth_same_quadrant": 226,
+          "off_by_two_or_more_same_quadrant": 61,
+          "wrong_quadrant": 15
+        }
       },
       {
         "v_weight": 2.0,
         "n_assigned": 574,
         "quadrant_accuracy": 0.9739,
         "tooth_accuracy": 0.4251,
-        "fdi_accuracy": 0.4199
+        "fdi_accuracy": 0.4199,
+        "within_one_position_accuracy": 0.824,
+        "error_breakdown": {
+          "n_wrong": 333,
+          "off_by_one_tooth_same_quadrant": 232,
+          "off_by_two_or_more_same_quadrant": 86,
+          "wrong_quadrant": 15
+        }
       },
       {
         "v_weight": 3.0,
         "n_assigned": 574,
         "quadrant_accuracy": 0.9739,
         "tooth_accuracy": 0.3693,
-        "fdi_accuracy": 0.3641
+        "fdi_accuracy": 0.3641,
+        "within_one_position_accuracy": 0.7544,
+        "error_breakdown": {
+          "n_wrong": 365,
+          "off_by_one_tooth_same_quadrant": 224,
+          "off_by_two_or_more_same_quadrant": 126,
+          "wrong_quadrant": 15
+        }
       }
     ],
     "n_assigned": 574,
     "quadrant_accuracy": 0.9739,
     "tooth_accuracy": 0.6028,
-    "fdi_accuracy": 0.5854
+    "fdi_accuracy": 0.5854,
+    "within_one_position_accuracy": 0.9233,
+    "error_breakdown": {
+      "n_wrong": 238,
+      "off_by_one_tooth_same_quadrant": 194,
+      "off_by_two_or_more_same_quadrant": 29,
+      "wrong_quadrant": 15
+    }
   },
   "validation": {
     "split": "val70 (the 70-image validation split from the same train pool)",
@@ -74,6 +137,13 @@
     "n_assigned": 339,
     "quadrant_accuracy": 0.9764,
     "tooth_accuracy": 0.5487,
-    "fdi_accuracy": 0.5428
+    "fdi_accuracy": 0.5428,
+    "within_one_position_accuracy": 0.9322,
+    "error_breakdown": {
+      "n_wrong": 155,
+      "off_by_one_tooth_same_quadrant": 132,
+      "off_by_two_or_more_same_quadrant": 15,
+      "wrong_quadrant": 8
+    }
   }
 }

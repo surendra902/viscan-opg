@@ -1,0 +1,104 @@
+{
+  "scope": "analyze_bytes() in this process, no HTTP server: file decode, input gate, model pass, annotation drawing and two PNG writes. wall_ms is the same work without a socket. peak_rss_mb is the largest 0.25 s sample of this process, which holds the checkpoint and one image at a time.",
+  "mode": "in-process full request",
+  "threads": 2,
+  "confidence_threshold": 0.7,
+  "n_images": 10,
+  "repeats_per_image": 2,
+  "per_request": [
+    {
+      "image": "sample_01_val_1_input.png",
+      "server_inference_ms": 12999.4,
+      "n_findings": 8,
+      "wall_ms": 13018.0
+    },
+    {
+      "image": "sample_01_val_1_input.png",
+      "server_inference_ms": 10534.1,
+      "n_findings": 8,
+      "wall_ms": 10554.1
+    },
+    {
+      "image": "sample_02_val_10_input.png",
+      "server_inference_ms": 13044.4,
+      "n_findings": 12,
+      "wall_ms": 13067.9
+    },
+    {
+      "image": "sample_02_val_10_input.png",
+      "server_inference_ms": 11881.4,
+      "n_findings": 12,
+      "wall_ms": 11898.8
+    },
+    {
+      "image": "sample_03_val_11_input.png",
+      "server_inference_ms": 22117.1,
+      "n_findings": 0,
+      "wall_ms": 22176.7
+    },
+    {
+      "image": "sample_03_val_11_input.png",
+      "server_inference_ms": 22577.7,
+      "n_findings": 0,
+      "wall_ms": 22600.6
+    },
+    {
+      "image": "sample_04_val_14_input.png",
+      "server_inference_ms": 13812.7,
+      "n_findings": 6,
+      "wall_ms": 13829.7
+    },
+    {
+      "image": "sample_04_val_14_input.png",
+      "server_inference_ms": 12424.2,
+      "n_findings": 6,
+      "wall_ms": 12441.1
+    },
+    {
+      "image": "sample_05_val_21_input.png",
+      "server_inference_ms": 14713.2,
+      "n_findings": 5,
+      "wall_ms": 14730.3
+    },
+    {
+      "image": "sample_05_val_21_input.png",
+      "server_inference_ms": 14244.9,
+      "n_findings": 5,
+      "wall_ms": 14278.7
+    }
+  ],
+  "service_inference": {
+    "mean_ms": 14834.9,
+    "median_ms": 13428.5,
+    "p95_ms": 22577.7,
+    "min_ms": 10534.1,
+    "max_ms": 22577.7
+  },
+  "wall": {
+    "mean_ms": 14859.6,
+    "median_ms": 13448.8,
+    "p95_ms": 22600.6,
+    "min_ms": 10554.1,
+    "max_ms": 22600.6
+  },
+  "memory_after_weight_load": {
+    "machine_total_ram_mb": 24261,
+    "rss_now_mb": 648.8
+  },
+  "memory": {
+    "memory_measured": true,
+    "rss_sampling_s": 0.25,
+    "n_rss_samples": 579,
+    "peak_rss_mb": 1072.0,
+    "final_rss_mb": 748.5
+  },
+  "environment": {
+    "platform": "Windows-10-10.0.26200-SP0",
+    "processor": "Intel64 Family 6 Model 154 Stepping 4, GenuineIntel",
+    "python": "3.11.15",
+    "torch": "2.14.1+cpu",
+    "psutil": "7.2.2",
+    "weights": "checkpoints\\best_model.pth",
+    "weights_sha256": "e0b49b12f48fc71ec1f583db08f107650659571e7c2b9cbd454dbfed13b46a1f"
+  }
+}
