@@ -1,0 +1,270 @@
+{
+  "basis": "arch_geometry",
+  "n_fit_boxes": 3190,
+  "quadrant_split": {
+    "u_midline": 0.510145,
+    "v_arch": 0.519144
+  },
+  "source": {
+    "annotation_file": "train_quadrant_enumeration_disease.json",
+    "dataset": "DENTEX",
+    "fit_rule": "same split as prepare_data.py",
+    "fit_split": "train (635 images of the 705-image pool, seed=42)",
+    "revision": "7b27ccc8e342dcb774f69adc6ca5e6c09fefce93"
+  },
+  "split_train_accuracy": {
+    "level": 0.9718,
+    "side": 0.9947
+  },
+  "support": {
+    "11": 30,
+    "12": 32,
+    "13": 18,
+    "14": 49,
+    "15": 79,
+    "16": 184,
+    "17": 145,
+    "18": 198,
+    "21": 26,
+    "22": 37,
+    "23": 20,
+    "24": 42,
+    "25": 94,
+    "26": 182,
+    "27": 139,
+    "28": 178,
+    "31": 7,
+    "32": 9,
+    "33": 22,
+    "34": 74,
+    "35": 120,
+    "36": 226,
+    "37": 193,
+    "38": 227,
+    "41": 13,
+    "42": 14,
+    "43": 16,
+    "44": 63,
+    "45": 97,
+    "46": 218,
+    "47": 212,
+    "48": 226
+  },
+  "tooth_centroids": {
+    "1": {
+      "1": [
+        0.488115,
+        0.449844
+      ],
+      "2": [
+        0.454485,
+        0.440446
+      ],
+      "3": [
+        0.423862,
+        0.436123
+      ],
+      "4": [
+        0.403152,
+        0.447281
+      ],
+      "5": [
+        0.375816,
+        0.441183
+      ],
+      "6": [
+        0.350904,
+        0.444285
+      ],
+      "7": [
+        0.317055,
+        0.415929
+      ],
+      "8": [
+        0.290052,
+        0.385287
+      ]
+    },
+    "2": {
+      "1": [
+        0.524183,
+        0.450721
+      ],
+      "2": [
+        0.552789,
+        0.450356
+      ],
+      "3": [
+        0.586135,
+        0.415761
+      ],
+      "4": [
+        0.612018,
+        0.434517
+      ],
+      "5": [
+        0.633334,
+        0.439471
+      ],
+      "6": [
+        0.660174,
+        0.4389
+      ],
+      "7": [
+        0.697302,
+        0.424274
+      ],
+      "8": [
+        0.720469,
+        0.381665
+      ]
+    },
+    "3": {
+      "1": [
+        0.513289,
+        0.675244
+      ],
+      "2": [
+        0.537723,
+        0.655286
+      ],
+      "3": [
+        0.56955,
+        0.68558
+      ],
+      "4": [
+        0.594286,
+        0.668887
+      ],
+      "5": [
+        0.619408,
+        0.669892
+      ],
+      "6": [
+        0.661259,
+        0.65838
+      ],
+      "7": [
+        0.705923,
+        0.629478
+      ],
+      "8": [
+        0.753204,
+        0.605746
+      ]
+    },
+    "4": {
+      "1": [
+        0.492413,
+        0.67476
+      ],
+      "2": [
+        0.463273,
+        0.662014
+      ],
+      "3": [
+        0.432189,
+        0.67476
+      ],
+      "4": [
+        0.412425,
+        0.669748
+      ],
+      "5": [
+        0.391695,
+        0.67078
+      ],
+      "6": [
+        0.350715,
+        0.658525
+      ],
+      "7": [
+        0.307828,
+        0.630294
+      ],
+      "8": [
+        0.261549,
+        0.604274
+      ]
+    }
+  },
+  "tuning": {
+    "fdi_accuracy": 0.5854,
+    "n_assigned": 574,
+    "n_fit_boxes": 2616,
+    "n_tune_boxes": 574,
+    "quadrant_accuracy": 0.9739,
+    "scores_by_v_weight": [
+      {
+        "fdi_accuracy": 0.5854,
+        "n_assigned": 574,
+        "quadrant_accuracy": 0.9739,
+        "tooth_accuracy": 0.6028,
+        "v_weight": 0.0
+      },
+      {
+        "fdi_accuracy": 0.5784,
+        "n_assigned": 574,
+        "quadrant_accuracy": 0.9739,
+        "tooth_accuracy": 0.5941,
+        "v_weight": 0.25
+      },
+      {
+        "fdi_accuracy": 0.5679,
+        "n_assigned": 574,
+        "quadrant_accuracy": 0.9739,
+        "tooth_accuracy": 0.5836,
+        "v_weight": 0.5
+      },
+      {
+        "fdi_accuracy": 0.5523,
+        "n_assigned": 574,
+        "quadrant_accuracy": 0.9739,
+        "tooth_accuracy": 0.5645,
+        "v_weight": 0.75
+      },
+      {
+        "fdi_accuracy": 0.5348,
+        "n_assigned": 574,
+        "quadrant_accuracy": 0.9739,
+        "tooth_accuracy": 0.5453,
+        "v_weight": 1.0
+      },
+      {
+        "fdi_accuracy": 0.4739,
+        "n_assigned": 574,
+        "quadrant_accuracy": 0.9739,
+        "tooth_accuracy": 0.4791,
+        "v_weight": 1.5
+      },
+      {
+        "fdi_accuracy": 0.4199,
+        "n_assigned": 574,
+        "quadrant_accuracy": 0.9739,
+        "tooth_accuracy": 0.4251,
+        "v_weight": 2.0
+      },
+      {
+        "fdi_accuracy": 0.3641,
+        "n_assigned": 574,
+        "quadrant_accuracy": 0.9739,
+        "tooth_accuracy": 0.3693,
+        "v_weight": 3.0
+      }
+    ],
+    "selected_on": "a 1/5 image holdout inside the 635-image train pool",
+    "tooth_accuracy": 0.6028
+  },
+  "v_weight": 0.0,
+  "validation": {
+    "fdi_accuracy": 0.5428,
+    "n_assigned": 339,
+    "n_boxes": 339,
+    "n_images": 70,
+    "quadrant_accuracy": 0.9764,
+    "split": "val70 (the 70-image validation split from the same train pool)",
+    "tooth_accuracy": 0.5487,
+    "used_for": "measurement only; nothing here was selected on these boxes"
+  },
+  "version": 1
+}

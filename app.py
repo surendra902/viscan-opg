@@ -716,7 +716,7 @@ def index_page():
           const boxArr = f.bbox_3d_voxel || f.bbox || [];
           const locStr = f.hemimandible
             ? `${f.hemimandible.toUpperCase()} (voxel ${JSON.stringify(f.closest_lower_tooth_voxel)})`
-            : (f.tooth_fdi !== null ? f.tooth_fdi : '<em>null</em>');
+            : (f.tooth_fdi !== null ? f.tooth_fdi + ' <em>(est.)</em>' : '<em>no estimate</em>');
           tr.innerHTML = `
             <td><span class="finding-badge ${badgeClass}">${f.class}</span></td>
             <td>${metricStr}</td>

@@ -5,131 +5,166 @@
     "name": "fasterrcnn_resnet50_fpn_v2",
     "version": "2.0.0"
   },
-  "inference_ms": 9404.5,
+  "tooth_numbering": {
+    "basis": "arch_geometry",
+    "note": "tooth_fdi is a position-based estimate from fitted arch geometry, not a tooth detection: a wrong box or a wrong class gives a wrong number.",
+    "fitted_on": "train (635 images of the 705-image pool, seed=42)",
+    "dataset_revision": "7b27ccc8e342dcb774f69adc6ca5e6c09fefce93",
+    "held_out_validation": {
+      "n_boxes": 339,
+      "fdi_exact": 0.5428,
+      "quadrant": 0.9764,
+      "tooth_digit": 0.5487
+    }
+  },
+  "inference_ms": 17403.3,
   "findings": [
     {
       "class": "caries",
       "confidence": 0.98,
-      "tooth_fdi": null,
+      "tooth_fdi": 24,
+      "tooth_fdi_basis": "arch_geometry",
       "bbox": [
-        1032.3,
-        781.9,
+        1686.7,
+        477.9,
+        1797.5,
+        762.1
+      ]
+    },
+    {
+      "class": "caries",
+      "confidence": 0.97,
+      "tooth_fdi": 45,
+      "tooth_fdi_basis": "arch_geometry",
+      "bbox": [
+        1032.2,
+        781.7,
         1138.5,
-        1067.4
+        1065.8
       ]
     },
     {
       "class": "caries",
-      "confidence": 0.98,
-      "tooth_fdi": null,
+      "confidence": 0.96,
+      "tooth_fdi": 38,
+      "tooth_fdi_basis": "arch_geometry",
       "bbox": [
-        1662.2,
-        780.8,
-        1846.6,
-        1080.2
+        2000.4,
+        715.6,
+        2244.9,
+        944.7
       ]
     },
     {
       "class": "caries",
-      "confidence": 0.98,
-      "tooth_fdi": null,
+      "confidence": 0.96,
+      "tooth_fdi": 25,
+      "tooth_fdi_basis": "arch_geometry",
       "bbox": [
-        1686.6,
-        456.5,
-        1795.5,
-        766.9
-      ]
-    },
-    {
-      "class": "caries",
-      "confidence": 0.98,
-      "tooth_fdi": null,
-      "bbox": [
-        1996.2,
-        711.2,
-        2237.7,
-        945.9
+        1775.6,
+        498.9,
+        1911.1,
+        757.0
       ]
     },
     {
       "class": "deep_caries",
-      "confidence": 0.97,
-      "tooth_fdi": null,
+      "confidence": 0.95,
+      "tooth_fdi": 36,
+      "tooth_fdi_basis": "arch_geometry",
       "bbox": [
-        1737.7,
-        758.1,
-        1985.7,
-        1052.1
+        1746.1,
+        760.3,
+        1968.5,
+        1057.9
       ]
     },
     {
       "class": "caries",
       "confidence": 0.95,
-      "tooth_fdi": null,
+      "tooth_fdi": 35,
+      "tooth_fdi_basis": "arch_geometry",
       "bbox": [
-        1771.8,
-        488.6,
-        1911.4,
-        761.0
+        1669.4,
+        795.1,
+        1841.8,
+        1081.9
       ]
     },
     {
       "class": "deep_caries",
-      "confidence": 0.91,
-      "tooth_fdi": null,
-      "bbox": [
-        952.4,
-        479.0,
-        1074.8,
-        755.2
-      ]
-    },
-    {
-      "class": "caries",
       "confidence": 0.89,
-      "tooth_fdi": null,
+      "tooth_fdi": 16,
+      "tooth_fdi_basis": "arch_geometry",
       "bbox": [
-        842.1,
-        762.0,
-        1080.5,
-        1066.6
+        955.0,
+        473.6,
+        1069.3,
+        762.3
       ]
     },
     {
-      "class": "deep_caries",
-      "confidence": 0.79,
-      "tooth_fdi": null,
+      "class": "caries",
+      "confidence": 0.87,
+      "tooth_fdi": 18,
+      "tooth_fdi_basis": "arch_geometry",
       "bbox": [
-        1614.8,
-        437.9,
-        1736.4,
-        779.9
+        749.2,
+        455.9,
+        885.7,
+        710.3
+      ]
+    },
+    {
+      "class": "caries",
+      "confidence": 0.84,
+      "tooth_fdi": 17,
+      "tooth_fdi_basis": "arch_geometry",
+      "bbox": [
+        846.6,
+        483.4,
+        984.7,
+        746.4
+      ]
+    },
+    {
+      "class": "caries",
+      "confidence": 0.8,
+      "tooth_fdi": 47,
+      "tooth_fdi_basis": "arch_geometry",
+      "bbox": [
+        685.0,
+        734.4,
+        967.1,
+        973.3
       ]
     },
     {
       "class": "caries",
       "confidence": 0.79,
-      "tooth_fdi": null,
+      "tooth_fdi": 46,
+      "tooth_fdi_basis": "arch_geometry",
       "bbox": [
-        1070.9,
-        781.3,
-        1168.0,
-        1087.8
+        854.4,
+        756.8,
+        1069.3,
+        1069.9
       ]
     },
     {
-      "class": "deep_caries",
-      "confidence": 0.77,
-      "tooth_fdi": null,
+      "class": "caries",
+      "confidence": 0.76,
+      "tooth_fdi": 23,
+      "tooth_fdi_basis": "arch_geometry",
       "bbox": [
-        743.9,
-        462.3,
-        889.2,
-        712.8
+        1613.6,
+        447.2,
+        1737.0,
+        765.3
       ]
     }
   ],
-  "summary": "11 findings: 7 caries, 4 deep caries.",
+  "summary": "12 findings: 10 caries, 2 deep caries.",
   "original_image_url": "/samples/sample_02_val_10_input.png",
   "annotated_image_url": "/samples/sample_02_val_10_annotated.png",
   "three_d_available": false,

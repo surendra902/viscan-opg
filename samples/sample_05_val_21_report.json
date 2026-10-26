@@ -5,43 +5,82 @@
     "name": "fasterrcnn_resnet50_fpn_v2",
     "version": "2.0.0"
   },
-  "inference_ms": 8759.0,
+  "tooth_numbering": {
+    "basis": "arch_geometry",
+    "note": "tooth_fdi is a position-based estimate from fitted arch geometry, not a tooth detection: a wrong box or a wrong class gives a wrong number.",
+    "fitted_on": "train (635 images of the 705-image pool, seed=42)",
+    "dataset_revision": "7b27ccc8e342dcb774f69adc6ca5e6c09fefce93",
+    "held_out_validation": {
+      "n_boxes": 339,
+      "fdi_exact": 0.5428,
+      "quadrant": 0.9764,
+      "tooth_digit": 0.5487
+    }
+  },
+  "inference_ms": 15299.3,
   "findings": [
     {
       "class": "caries",
-      "confidence": 0.98,
-      "tooth_fdi": null,
+      "confidence": 0.97,
+      "tooth_fdi": 37,
+      "tooth_fdi_basis": "arch_geometry",
       "bbox": [
-        1895.3,
-        700.3,
-        2139.2,
-        989.3
+        1899.3,
+        706.7,
+        2139.6,
+        983.0
+      ]
+    },
+    {
+      "class": "periapical_lesion",
+      "confidence": 0.9,
+      "tooth_fdi": 36,
+      "tooth_fdi_basis": "arch_geometry",
+      "bbox": [
+        1766.1,
+        721.8,
+        1992.2,
+        1040.8
       ]
     },
     {
       "class": "impacted_tooth",
-      "confidence": 0.95,
-      "tooth_fdi": null,
+      "confidence": 0.89,
+      "tooth_fdi": 38,
+      "tooth_fdi_basis": "arch_geometry",
       "bbox": [
-        2038.6,
-        681.8,
-        2237.7,
-        935.4
+        2037.3,
+        676.5,
+        2242.9,
+        930.7
+      ]
+    },
+    {
+      "class": "caries",
+      "confidence": 0.87,
+      "tooth_fdi": 26,
+      "tooth_fdi_basis": "arch_geometry",
+      "bbox": [
+        1793.7,
+        422.3,
+        1954.8,
+        723.6
       ]
     },
     {
       "class": "impacted_tooth",
-      "confidence": 0.76,
-      "tooth_fdi": null,
+      "confidence": 0.78,
+      "tooth_fdi": 48,
+      "tooth_fdi_basis": "arch_geometry",
       "bbox": [
-        707.0,
-        674.8,
-        907.2,
-        950.8
+        709.1,
+        680.7,
+        909.8,
+        936.2
       ]
     }
   ],
-  "summary": "3 findings: 1 caries, 2 impacted tooth.",
+  "summary": "5 findings: 2 caries, 2 impacted tooth, 1 periapical lesion.",
   "original_image_url": "/samples/sample_05_val_21_input.png",
   "annotated_image_url": "/samples/sample_05_val_21_annotated.png",
   "three_d_available": false,

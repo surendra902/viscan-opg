@@ -33,6 +33,7 @@ try:
 except ImportError:
     transforms = None
 
+import fdi
 from imaging import load_image_bytes, ImageProcessingError
 from input_gate import DentalInputGate, NonDentalInputError
 from model import build_model_from_config, load_model_weights, CLASS_NAMES, HAS_TORCHVISION
@@ -125,6 +126,9 @@ class DentalAnalysisService:
         self.conf_threshold = confidence_threshold
         self.model = None
         self.input_gate = DentalInputGate(device=device)
+        # Tooth numbering comes from a geometry table fitted on DENTEX train boxes
+        # (scripts/dentex_fdi.py). Absent table means the field stays null, never guessed.
+        self.fdi_table = fdi.load_table()
         # A 3D sliding-window run needs several GB of VRAM/RAM. Serialize CBCT requests
         # so two concurrent uploads cannot exhaust the worker; the queue timeout is HTTP-level.
         self._cbct_lock = threading.Lock()
@@ -201,11 +205,14 @@ class DentalAnalysisService:
             y_max = max(0.0, min(float(orig_h), float(box[3])))
 
             if x_max > x_min and y_max > y_min:
+                box = [round(x_min, 1), round(y_min, 1), round(x_max, 1), round(y_max, 1)]
+                guess = fdi.estimate_fdi(box, orig_w, orig_h, self.fdi_table)
                 findings.append({
                     "class": class_name,
                     "confidence": round(score_val, 2),
-                    "tooth_fdi": None,
-                    "bbox": [round(x_min, 1), round(y_min, 1), round(x_max, 1), round(y_max, 1)],
+                    "tooth_fdi": guess["fdi"] if guess else None,
+                    "tooth_fdi_basis": fdi.BASIS if guess else None,
+                    "bbox": box,
                 })
 
         # 4. Save Original (decoded PNG for DICOM preview) and Annotated Image
@@ -230,6 +237,7 @@ class DentalAnalysisService:
                 "name": "fasterrcnn_resnet50_fpn_v2",
                 "version": "2.0.0",
             },
+            "tooth_numbering": self._tooth_numbering(),
             "inference_ms": inference_ms,
             "findings": findings,
             "summary": summary,
@@ -564,6 +572,8 @@ class DentalAnalysisService:
 
             # Label banner
             text = f"{cls_name} {conf:.2f}"
+            if item.get("tooth_fdi") is not None:
+                text += f" · FDI {item['tooth_fdi']} (est)"
             font_size = max(12, int(min(w, h) / 50))
             try:
                 font = ImageFont.truetype("arial.ttf", font_size)
@@ -579,6 +589,28 @@ class DentalAnalysisService:
             draw.text((x0 + 3, label_y0 + 2), text, fill="#000000", font=font)
 
         return draw_img
+
+    def _tooth_numbering(self) -> Optional[Dict[str, Any]]:
+        """Provenance and held-out accuracy for the estimated tooth numbers, or None if no table is fitted."""
+        if self.fdi_table is None:
+            return None
+        source = self.fdi_table.get("source", {})
+        validation = self.fdi_table.get("validation", {})
+        return {
+            "basis": fdi.BASIS,
+            "note": (
+                "tooth_fdi is a position-based estimate from fitted arch geometry, not a tooth detection: "
+                "a wrong box or a wrong class gives a wrong number."
+            ),
+            "fitted_on": source.get("fit_split"),
+            "dataset_revision": source.get("revision"),
+            "held_out_validation": {
+                "n_boxes": validation.get("n_boxes"),
+                "fdi_exact": validation.get("fdi_accuracy"),
+                "quadrant": validation.get("quadrant_accuracy"),
+                "tooth_digit": validation.get("tooth_accuracy"),
+            },
+        }
 
     def _generate_summary(self, findings: List[Dict[str, Any]]) -> str:
         """Derives a concise, deterministic summary from detected findings."""

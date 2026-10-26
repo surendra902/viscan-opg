@@ -5,7 +5,19 @@
     "name": "fasterrcnn_resnet50_fpn_v2",
     "version": "2.0.0"
   },
-  "inference_ms": 8768.7,
+  "tooth_numbering": {
+    "basis": "arch_geometry",
+    "note": "tooth_fdi is a position-based estimate from fitted arch geometry, not a tooth detection: a wrong box or a wrong class gives a wrong number.",
+    "fitted_on": "train (635 images of the 705-image pool, seed=42)",
+    "dataset_revision": "7b27ccc8e342dcb774f69adc6ca5e6c09fefce93",
+    "held_out_validation": {
+      "n_boxes": 339,
+      "fdi_exact": 0.5428,
+      "quadrant": 0.9764,
+      "tooth_digit": 0.5487
+    }
+  },
+  "inference_ms": 17506.4,
   "findings": [],
   "summary": "No pathological findings detected at current confidence threshold.",
   "original_image_url": "/samples/sample_03_val_11_input.png",

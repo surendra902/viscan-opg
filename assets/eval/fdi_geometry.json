@@ -1,0 +1,79 @@
+{
+  "tuning": {
+    "selected_on": "a 1/5 image holdout inside the 635-image train pool",
+    "n_fit_boxes": 2616,
+    "n_tune_boxes": 574,
+    "scores_by_v_weight": [
+      {
+        "v_weight": 0.0,
+        "n_assigned": 574,
+        "quadrant_accuracy": 0.9739,
+        "tooth_accuracy": 0.6028,
+        "fdi_accuracy": 0.5854
+      },
+      {
+        "v_weight": 0.25,
+        "n_assigned": 574,
+        "quadrant_accuracy": 0.9739,
+        "tooth_accuracy": 0.5941,
+        "fdi_accuracy": 0.5784
+      },
+      {
+        "v_weight": 0.5,
+        "n_assigned": 574,
+        "quadrant_accuracy": 0.9739,
+        "tooth_accuracy": 0.5836,
+        "fdi_accuracy": 0.5679
+      },
+      {
+        "v_weight": 0.75,
+        "n_assigned": 574,
+        "quadrant_accuracy": 0.9739,
+        "tooth_accuracy": 0.5645,
+        "fdi_accuracy": 0.5523
+      },
+      {
+        "v_weight": 1.0,
+        "n_assigned": 574,
+        "quadrant_accuracy": 0.9739,
+        "tooth_accuracy": 0.5453,
+        "fdi_accuracy": 0.5348
+      },
+      {
+        "v_weight": 1.5,
+        "n_assigned": 574,
+        "quadrant_accuracy": 0.9739,
+        "tooth_accuracy": 0.4791,
+        "fdi_accuracy": 0.4739
+      },
+      {
+        "v_weight": 2.0,
+        "n_assigned": 574,
+        "quadrant_accuracy": 0.9739,
+        "tooth_accuracy": 0.4251,
+        "fdi_accuracy": 0.4199
+      },
+      {
+        "v_weight": 3.0,
+        "n_assigned": 574,
+        "quadrant_accuracy": 0.9739,
+        "tooth_accuracy": 0.3693,
+        "fdi_accuracy": 0.3641
+      }
+    ],
+    "n_assigned": 574,
+    "quadrant_accuracy": 0.9739,
+    "tooth_accuracy": 0.6028,
+    "fdi_accuracy": 0.5854
+  },
+  "validation": {
+    "split": "val70 (the 70-image validation split from the same train pool)",
+    "n_images": 70,
+    "n_boxes": 339,
+    "used_for": "measurement only; nothing here was selected on these boxes",
+    "n_assigned": 339,
+    "quadrant_accuracy": 0.9764,
+    "tooth_accuracy": 0.5487,
+    "fdi_accuracy": 0.5428
+  }
+}
