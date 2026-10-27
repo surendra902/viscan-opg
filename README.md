@@ -485,8 +485,7 @@ In short: the code and architecture could ship commercially, but the trained 2D 
 
 **Limits**
 
-- Misses most periapical lesions and many deep caries at the default 0.70 setting.
-- Many caries false alarms on low-contrast gaps between teeth and around fillings.
+
 - `tooth_fdi` is a position estimate, not a tooth detection: it reads the box centre against a geometry table fitted on DENTEX train boxes, and it is only right on 0.543 of validation boxes (0.976 get the quadrant right, 0.932 get the quadrant and land within one tooth position). A wrong box or a wrong class carries the wrong number with it, and the annotated PNG says `(est)` for that reason. The number itself is always a legal FDI code — never 9 or 53 — but legal is not the same as correct.
 - The detector labels four findings only, because that is all DENTEX labels. No restorations, root-canal fillings, missing teeth or bone loss ([REPORT.md](REPORT.md) §7).
 - The test set is small (50 images), so per-class numbers are rough.
