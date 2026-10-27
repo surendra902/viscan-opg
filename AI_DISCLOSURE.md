@@ -26,4 +26,4 @@ No other AI assistants were used. Every training run, evaluation and latency num
 
 - **System Architecture and Design Decisions:** Selecting Faster R-CNN ResNet-50 FPN V2 (`COCO_V1`) for two-stage detection under BSD-3-Clause code licensing (with explicit `CC BY-NC-SA 4.0` disclosure for DENTEX-derived weights), designing the 3-way dataset split (`635` train / `70` val / `50` test), executing training and evaluation on Kaggle Tesla T4 GPU, and reviewing all technical claims and failure modes were directed and verified by the candidate.
 - **Tooth numbering:** answering "which tooth is this finding on" with a geometry table fitted on DENTEX's own quadrant and tooth-position labels, instead of training a second detector, and keeping the result labelled an estimate in the JSON, on the drawn box and in the limits section, were the candidate's calls. So was the decision not to add classes DENTEX does not label.
-- **Code Comprehension:** The candidate understands and can explain every function, class, metric, and architectural trade-off in this repository during the technical walkthrough.
+
