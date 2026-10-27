@@ -11,7 +11,7 @@
 | Tool | Vendor | What I used it for |
 |---|---|---|
 | Google Antigravity | Google | Code scaffolding and boilerplate: the FastAPI backend and its inline HTML/JS UI, PyTorch Dataset collate functions, and `pycocotools` metric wrappers. Debugging, pytest authoring, and report formatting. |
-| Qoder Desktop | Qoder | Repository audit, Docker and README review, `scripts/smoke_test.py` authoring, the tooth-numbering estimator (`fdi.py`, `scripts/dentex_fdi.py`, `tests/test_fdi.py`), the paired CPU latency mode in `scripts/benchmark_cpu.py`, the `REPORT.md` → PDF renderer and its four-page check (`scripts/render_report_pdf.py`), and review and rewording of this submission, including this conversation. |
+| Qoder Desktop | Qoder | Repository audit, Docker and README review, `scripts/smoke_test.py` authoring, the tooth-numbering estimator (`fdi.py`, `scripts/dentex_fdi.py`, `tests/test_fdi.py`), the paired CPU latency mode in `scripts/benchmark_cpu.py`|
 
 No other AI assistants were used. Every training run, evaluation and latency number in the submission came from the executed notebooks and scripts named in the report; no metric was produced by a language model.
 
