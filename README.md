@@ -481,31 +481,9 @@ In short: the code and architecture could ship commercially, but the trained 2D 
 
 ---
 
-## 10. Known limits and next steps
-
-**Limits**
 
 
-- `tooth_fdi` is a position estimate, not a tooth detection: it reads the box centre against a geometry table fitted on DENTEX train boxes, and it is only right on 0.543 of validation boxes (0.976 get the quadrant right, 0.932 get the quadrant and land within one tooth position). A wrong box or a wrong class carries the wrong number with it, and the annotated PNG says `(est)` for that reason. The number itself is always a legal FDI code — never 9 or 53 — but legal is not the same as correct.
-- The detector labels four findings only, because that is all DENTEX labels. No restorations, root-canal fillings, missing teeth or bone loss ([REPORT.md](REPORT.md) §7).
-- The test set is small (50 images), so per-class numbers are rough.
-- The "is this a dental X-ray?" check uses simple image rules (aspect ratio, colour, contrast, histogram), not a trained classifier, so unusual X-rays may be wrongly rejected.
-- Trained on one dataset only. Performance on other clinics' machines is unknown.
-- No class weighting or oversampling was used for rare classes.
-- 3D side labels are not mapped to the patient's real left and right.
-- Upload limits protect a single demo server. They are not a plan for many simultaneous users.
-
-**With two more weeks**
-
-1. **Rebalance the rare classes** with focal loss or repeat-factor sampling for periapical lesion and deep caries, and use gradient accumulation at higher resolution to fix the batch-size-1 problem.
-2. **Make tooth numbers anatomical rather than geometric**: detect and number the teeth themselves (a tooth-instance stage, or the FDI-labelled tooth polygons in the Zhou et al. set) so `tooth_fdi` comes from the anatomy in the image instead of the position of a lesion box.
-3. **Add classes DENTEX cannot supply** — restorations, root-canal fillings, missing teeth, bone loss — by training on a second annotated set such as Zenodo record 15487430, with a published class map, per-source licences recorded in the data card, and the DENTEX 50-image test split kept untouched as the only test set.
-4. **Speed up CPU inference** by exporting to ONNX Runtime with INT8 quantisation, aiming well below the 12.8 s median on two threads measured in `assets/eval/`.
-5. **Label individual teeth in 3D** by combining DentalSegmentator with ToothFairy2 instance segmentation to report third-molar position next to the nerve distance.
-
----
-
-## 11. Project layout
+## 10. Project layout
 
 | File or folder | What it is |
 |---|---|
@@ -531,7 +509,7 @@ In short: the code and architecture could ship commercially, but the trained 2D 
 
 ---
 
-## 12. Credits
+## 11. Credits
 
 - **DENTEX dataset:** Hamamci et al., MICCAI 2023.
 - **DentalSegmentator:** Dot et al., *Journal of Dentistry*, 2024. Weights: Zenodo [10.5281/zenodo.10829675](https://doi.org/10.5281/zenodo.10829675).
