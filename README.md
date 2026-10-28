@@ -24,7 +24,6 @@ This is a decision-support prototype built for the Viscan AI Engineer take-home 
 **Quick links**
 
 - Live demo: https://huggingface.co/spaces/surendra08/viscan-opg
-- Demo video (5-8 min, narrated): pending — to be recorded against this build
 - Model weights: https://huggingface.co/surendra08/viscan-opg-weights
 - Technical report: [REPORT.md](REPORT.md) (4-page PDF: [REPORT.pdf](REPORT.pdf))
 - AI tool disclosure: [AI_DISCLOSURE.md](AI_DISCLOSURE.md)
